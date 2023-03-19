@@ -9,6 +9,7 @@ defmodule Yecc.Util.Table do
   @table_instance :yecc_table_instance
   @table_precedences :yecc_table_precedences
   @table_action :yecc_table_action
+  @table_closure :yecc_table_closure
 
   def initialize_tables() do
     :ets.new(@table_state_id, [:set, :named_table])
@@ -20,11 +21,16 @@ defmodule Yecc.Util.Table do
     Agent.start_link(fn -> nil end, name: @table_rhs)
     Agent.start_link(fn -> nil end, name: @table_info)
     Agent.start_link(fn -> nil end, name: @table_coded)
+    Agent.start_link(fn -> Map.new() end, name: @table_closure)
     Agent.start_link(fn -> Keyword.new() end, name: @table_instance)
   end
 
   def get_instance_n() do
     get(@table_instance, :n_states)
+  end
+
+  def get_states() do
+    get(@table_instance, :state_table)
   end
 
   def get_coded(key) do
@@ -45,6 +51,18 @@ defmodule Yecc.Util.Table do
 
   def get_rule_pointer_to_rule(rule_pointer) do
     get(@table_instance, :rule_pointer_to_rule, rule_pointer)
+  end
+
+  def get_closure(rule_pointer) do
+    get(@table_closure, rule_pointer)
+  end
+
+  def pop_closure() do
+    Agent.get_and_update(@table_closure, fn state -> {state, Map.new()} end) |> Map.to_list()
+  end
+
+  def store_closure(key, value) do
+    store(@table_closure, key, value)
   end
 
   def store_action(key, value) do
@@ -76,8 +94,7 @@ defmodule Yecc.Util.Table do
   end
 
   def store_symbols(value) do
-    IO.inspect(value, label: "store_symbols")
-    :ets.insert(@table_symbol, value) |> IO.inspect(label: "result")
+    :ets.insert(@table_symbol, value)
     :ets.insert(@table_inverted_symbol, value)
   end
 
@@ -157,6 +174,10 @@ defmodule Yecc.Util.Table do
     get(@table_instance, :rule_pointer_to_rule)
   end
 
+  def get_content(:get_states) do
+    get(@table_instance, :state_table)
+  end
+
   def get_content(:rule_pointer_rhs) do
     get(@table_rhs)
   end
@@ -173,8 +194,12 @@ defmodule Yecc.Util.Table do
     Agent.get(name, & &1)
   end
 
+  defp get(@table_closure, rule_pointer) do
+    Agent.get(@table_closure, &Map.get(&1, rule_pointer))
+  end
+
   defp get(name, rule_pointer) when is_integer(rule_pointer) do
-    Agent.get(name, &elem(&1, rule_pointer))
+    Agent.get(name, &elem(&1, rule_pointer - 1))
   end
 
   defp get(name, key) when is_atom(key) do
@@ -182,11 +207,15 @@ defmodule Yecc.Util.Table do
   end
 
   defp get(name, key, n) when is_atom(key) and is_integer(n) do
-    Agent.get(name, &(Keyword.get(&1, key) |> elem(n)))
+    Agent.get(name, &(Keyword.get(&1, key) |> elem(n - 1)))
   end
 
   defp store(name, key, value) when is_atom(key) do
     Agent.update(name, &Keyword.put(&1, key, value))
+  end
+
+  defp store(name, key, value) do
+    Agent.update(name, &Map.put(&1, key, value))
   end
 
   defp store(name, value) do

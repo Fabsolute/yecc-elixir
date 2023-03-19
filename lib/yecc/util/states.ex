@@ -11,11 +11,7 @@ defmodule Yecc.Util.States do
 
     end_symbol_code = Code.code_terminal(end_symbol)
 
-    {state_id, state} =
-      compute_state(
-        Map.new(),
-        [{end_symbol_code, 1}]
-      )
+    {state_id, state} = compute_state([{end_symbol_code, 1}])
 
     first_state = {0, state}
 
@@ -31,7 +27,8 @@ defmodule Yecc.Util.States do
     Code.decode_goto()
   end
 
-  def is_terminal(element), do: element >= 0
+  @spec is_terminal?(integer) :: boolean
+  def is_terminal?(element) when is_integer(element), do: element >= 0
 
   defp lookup_state(state_table, n) do
     elem(state_table, n)
@@ -91,7 +88,7 @@ defmodule Yecc.Util.States do
 
     xl =
       Enum.flat_map(rules, fn {head, {head, rhs}} ->
-        Enum.reject(rhs, &is_terminal/1) |> Enum.map(&{&1, head})
+        Enum.reject(rhs, &is_terminal?/1) |> Enum.map(&{&1, head})
       end)
       |> family_with_domain(nonterminals)
 
@@ -116,7 +113,7 @@ defmodule Yecc.Util.States do
   end
 
   defp left_corners(q, left_corner, left_hand_table, xref) do
-    case Enum.concat(q) |> Enum.sort() do
+    case Enum.concat(q) |> Enum.sort() |> Enum.dedup() do
       [] ->
         left_corner
 
@@ -185,16 +182,15 @@ defmodule Yecc.Util.States do
   end
 
   defp insert_state(state_table, {n, _} = state, state_id) do
-    state_table =
-      if tuple_size(state_table) > n do
-        state_table
-      else
-        ((state_table |> Tuple.to_list()) ++ List.duplicate([], round(1 + n * 1.5)))
-        |> List.to_tuple()
-      end
-
     insert_state_id(n, state_id)
-    put_elem(state_table, n, state)
+
+    if tuple_size(state_table) > n do
+      state_table
+    else
+      ((state_table |> Tuple.to_list()) ++ List.duplicate([], round(1 + n * 1.5)))
+      |> List.to_tuple()
+    end
+    |> put_elem(n, state)
   end
 
   defp insert_state_id(n, state_id) do
@@ -208,7 +204,7 @@ defmodule Yecc.Util.States do
          current_state,
          state_table
        ) do
-    {_, s} = elem(state_table, n)
+    {_, s} = lookup_state(state_table, n)
 
     state_seeds(s, symbols)
     |> compute_states2(
@@ -240,7 +236,7 @@ defmodule Yecc.Util.States do
          current_state,
          state_table
        ) do
-    {state_id, new_state} = compute_state(Map.new(), seed)
+    {state_id, new_state} = compute_state(seed)
 
     case check_states(new_state, state_id, state_table) do
       :add ->
@@ -299,55 +295,57 @@ defmodule Yecc.Util.States do
     end
   end
 
-  defp compute_closure(map, look_ahead, rule_pointer) do
+  defp compute_closure(look_ahead, rule_pointer) do
     case Table.get_info(rule_pointer) do
-      [] ->
-        Map.new()
+      [] = void ->
+        void
 
       {:no_union, expanding_rules, new_look_ahead} ->
-        compute_closure1(map, expanding_rules, new_look_ahead)
+        compute_closure1(expanding_rules, new_look_ahead)
 
       {:union, expanding_rules, look_ahead_1} ->
         new_look_ahead = Bitwise.set_union(look_ahead, look_ahead_1)
-        compute_closure1(map, expanding_rules, new_look_ahead)
+        compute_closure1(expanding_rules, new_look_ahead)
 
       expanding_rules ->
-        compute_closure1(map, expanding_rules, look_ahead)
+        compute_closure1(expanding_rules, look_ahead)
     end
   end
 
-  defp compute_closure1(map, [rule_pointer | tail], new_look_ahead) do
-    map = compute_closure1(map, tail, new_look_ahead)
+  defp compute_closure1([rule_pointer | tail], new_look_ahead) do
+    compute_closure1(tail, new_look_ahead)
 
-    case Map.get(map, rule_pointer) do
+    case Table.get_closure(rule_pointer) do
       nil ->
-        map = Map.put(map, rule_pointer, new_look_ahead)
-        compute_closure(map, new_look_ahead, rule_pointer)
+        Table.store_closure(rule_pointer, new_look_ahead)
+        compute_closure(new_look_ahead, rule_pointer)
 
       look_ahead_2 ->
         look_ahead = Bitwise.set_union(look_ahead_2, new_look_ahead)
 
         if look_ahead == look_ahead_2 do
+          # void
           look_ahead_2
         else
-          map = Map.put(map, rule_pointer, look_ahead)
-          compute_closure(map, new_look_ahead, rule_pointer)
+          Table.store_closure(rule_pointer, look_ahead)
+          compute_closure(new_look_ahead, rule_pointer)
         end
     end
   end
 
-  defp compute_closure1(map, _, _), do: map
+  defp compute_closure1(null, _), do: null
 
-  defp compute_state(closure, seeds) do
-    closure =
-      Enum.reduce(seeds, closure, fn {look_ahead, rule_pointer}, map ->
-        Map.put(map, rule_pointer, look_ahead)
-      end)
+  defp compute_state(seed) do
 
-    Enum.reduce(seeds, closure, fn {look_ahead, rule_pointer}, map ->
-      compute_closure(map, look_ahead, rule_pointer)
-    end)
-    |> Map.to_list()
+    for {look_ahead, rule_pointer} <- seed do
+      Table.store_closure(rule_pointer, look_ahead)
+    end
+
+    for {look_ahead, rule_pointer} <- seed do
+      compute_closure(look_ahead, rule_pointer)
+    end
+
+    Table.pop_closure()
     |> state_items([], [])
   end
 
@@ -364,10 +362,10 @@ defmodule Yecc.Util.States do
   defp state_items(_, items, id), do: {id, items}
 
   defp state_seeds(items, symbols) do
-    for {rule_pointer, look_ahead, [s | _]} <- items do
+    for %Item{rule_pointer: rule_pointer, look_ahead: look_ahead, rhs: [s | _]} <- items do
       {s, {look_ahead, rule_pointer + 1}}
     end
-    |> List.keysort(1)
+    |> List.keysort(0)
     |> state_seeds1(symbols)
   end
 
@@ -387,7 +385,10 @@ defmodule Yecc.Util.States do
   end
 
   defp get_current_symbols(state) do
-    state |> get_current_symbols1([]) |> Enum.sort()
+    state
+    |> get_current_symbols1([])
+    |> Enum.sort()
+    |> Enum.dedup()
   end
 
   defp get_current_symbols1([], symbols), do: symbols
@@ -404,7 +405,7 @@ defmodule Yecc.Util.States do
       n = Table.lookup_element_state_id(state_id)
       {_, old_state} = lookup_state(state_table, n)
       check_state1(new_state, old_state, [], n)
-    catch
+    rescue
       _ -> :add
     end
   end
@@ -443,7 +444,7 @@ defmodule Yecc.Util.States do
     end
   end
 
-  defp check_state2([], [], symbols, n), do: {:merge, n, Enum.sort(symbols)}
+  defp check_state2([], [], symbols, n), do: {:merge, n, symbols |> Enum.sort() |> Enum.dedup()}
 
   defp merge_states(new_state, state_table, m, state_id) do
     {_, old_state} = lookup_state(state_table, m)

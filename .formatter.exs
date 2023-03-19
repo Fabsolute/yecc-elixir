@@ -7,7 +7,7 @@
     nonassoc: 1,
     unary: 1,
     nonterminals: 1,
-    terminals: 1
+    terminals: 1,
     root: 1
   ]
 ]

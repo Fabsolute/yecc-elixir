@@ -8,7 +8,7 @@ defmodule Yecc do
     quote do
       @symbol_empty :__empty__
       @symbol_end :__end__
-      @nonterminals [{}]
+      @nonterminals []
       @terminals [@symbol_empty]
 
       @precedences []
@@ -27,29 +27,33 @@ defmodule Yecc do
 
     [
       &check_grammar/1,
-      &update_rules/1,
+      &prepare_attributes/1,
       &Util.create_symbol_table/1,
       &Util.create_codeds/1,
       &Util.compute_states/1
     ]
     |> Enum.each(& &1.(env.module))
 
-    rest =
-      [:symbol_table, :rule_pointer_to_rule, :codeds, :rule_pointer_rhs, :rule_pointer_info]
+    table_contents =
+      [
+        :symbol_table,
+        :rule_pointer_to_rule,
+        :codeds,
+        :rule_pointer_rhs,
+        :rule_pointer_info,
+        :get_states
+      ]
       |> Enum.map(&{&1, Util.Table.get_content(&1)})
-      |> Macro.escape()
+
+    contents =
+      [:precedences, :root, :nonterminals, :terminals, :rules, :expect]
+      |> Enum.map(&Module.get_attribute(env.module, &1))
+
+    all_contents = (contents ++ table_contents) |> Macro.escape()
 
     quote do
       def parse(tokens) do
-        {tokens,
-         [
-           precedences: @precedences,
-           root: @root,
-           nonterminals: @nonterminals,
-           terminals: @terminals,
-           rules: @rules,
-           expect: @expect
-         ] ++ unquote(rest)}
+        {tokens, unquote(all_contents)}
       end
 
       def return_error(a, b) do
@@ -155,12 +159,18 @@ defmodule Yecc do
     end
   end
 
-  defp update_rules(module) do
+  defp prepare_attributes(module) do
+    nonterminals = Module.get_attribute(module, :nonterminals) |> Enum.sort()
+    terminals = Module.get_attribute(module, :terminals) |> Enum.sort()
+
+    Module.put_attribute(module, :terminals, terminals)
+    Module.put_attribute(module, :nonterminals, [{} | nonterminals])
+
+    root = Module.get_attribute(module, :root)
+    rules = Module.get_attribute(module, :rules)
+
     rules =
-      [
-        %Rule{symbols: [{}, Module.get_attribute(module, :root)], tokens: []}
-        | Module.get_attribute(module, :rules)
-      ]
+      [%Rule{symbols: [{}, root], tokens: []} | rules]
       |> Enum.with_index()
       |> Enum.map(fn {rule, index} -> %{rule | n: index} end)
 

@@ -18,60 +18,60 @@ defmodule Yecc.Util.Action do
          [%Item{rule_pointer: rule_pointer, look_ahead: look_ahead, rhs: rhs} | items],
          n
        ) do
-    # case rhs do
-    #   [] ->
-    #     look_ahead = Code.decode_terminals(look_ahead)
+    case rhs do
+      [] ->
+        look_ahead = Code.decode_terminals(look_ahead)
 
-    #     case rule(rule_pointer) do
-    #       {[@accept | _], _} ->
-    #         [{look_ahead, :accept} | compute_parse_actions1(items, n)]
+        case rule(rule_pointer) do
+          {[@accept | _], _} ->
+            [{look_ahead, :accept} | compute_parse_actions1(items, n)]
 
-    #       {[head | daughters], _} ->
-    #         daughters = List.delete(daughters, :__empty__)
+          {[head | daughters], _} ->
+            daughters = List.delete(daughters, :__empty__)
 
-    #         [
-    #           {look_ahead,
-    #            %Reduce{
-    #              rule_number: rule_pointer,
-    #              head: head,
-    #              number_of_daughters: length(daughters),
-    #              precedence: get_precedence(daughters ++ [head])
-    #            }}
-    #           | compute_parse_actions1(items, n)
-    #         ]
-    #     end
+            [
+              {look_ahead,
+               %Reduce{
+                 rule_number: rule_pointer,
+                 head: head,
+                 number_of_daughters: length(daughters),
+                 precedence: get_precedence(daughters ++ [head])
+               }}
+              | compute_parse_actions1(items, n)
+            ]
+        end
 
-    #   [symbol | daugters] ->
-    #     if States.is_terminal(symbol) do
-    #       decoded_symbol = Code.decode_symbol(symbol)
-    #       {[head | _], _, _} = rule(rule_pointer)
+      [symbol | daugters] ->
+        if States.is_terminal?(symbol) do
+          decoded_symbol = Code.decode_symbol(symbol)
+          {[head | _], _} = rule(rule_pointer)
 
-    #       prec =
-    #         case daugters do
-    #           [] -> get_precedence([decoded_symbol, head])
-    #           _ -> get_precedence([decoded_symbol])
-    #         end
+          prec =
+            case daugters do
+              [] -> get_precedence([decoded_symbol, head])
+              _ -> get_precedence([decoded_symbol])
+            end
 
-    #       pos =
-    #         case daugters do
-    #           [] -> :z
-    #           _ -> :a
-    #         end
+          pos =
+            case daugters do
+              [] -> :z
+              _ -> :a
+            end
 
-    #       [
-    #         {decoded_symbol},
-    #         %Shift{
-    #           state: goto(n, decoded_symbol),
-    #           pos: pos,
-    #           precedence: prec,
-    #           rule_number: rule_pointer
-    #         }
-    #         | compute_parse_actions1(items, n)
-    #       ]
-    #     else
-    #       compute_parse_actions1(items, n)
-    #     end
-    # end
+          [
+            {[decoded_symbol],
+             %Shift{
+               state: goto(n, decoded_symbol),
+               pos: pos,
+               precedence: prec,
+               rule_number: rule_pointer
+             }}
+            | compute_parse_actions1(items, n)
+          ]
+        else
+          compute_parse_actions1(items, n)
+        end
+    end
   end
 
   defp rule(rule_pointer) do
