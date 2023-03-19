@@ -1,5 +1,5 @@
 defmodule Yecc.Util do
-  alias Yecc.Util.{Table, States, Code}
+  alias Yecc.Util.{Table, States, Code, Action}
 
   def replace_args(args) do
     {other, variables} = replace_args(args, MapSet.new())
@@ -73,5 +73,9 @@ defmodule Yecc.Util do
   def create_precedence_table(module) do
     precedences = Module.get_attribute(module, :precedences)
     Table.store_precedences(precedences)
+  end
+
+  def compute_parse_actions(_) do
+    Action.parse_actions()
   end
 end

@@ -4,10 +4,17 @@ defmodule Yecc.Util.Action do
   alias Yecc.Struct.{Item, Rule, Reduce, Shift}
   alias Yecc.Util.{Table, Code, States}
 
-  def compute_parse_actions(n, state_actions) when n < 0, do: state_actions
+  def parse_actions() do
+    n = Table.get_instance_n()
 
-  def compute_parse_actions(n, state_actions) do
-    {^n, state_n} = Table.lookup_state(n)
+    compute_parse_actions(n, [])
+    |> Table.store_instance_parse_actions()
+  end
+
+  defp compute_parse_actions(n, state_actions) when n < 0, do: state_actions
+
+  defp compute_parse_actions(n, state_actions) do
+    {^n, state_n} = Table.lookup_state(n + 1)
     actions = compute_parse_actions1(state_n, n)
     compute_parse_actions(n - 1, [{n, actions} | state_actions])
   end
@@ -75,7 +82,7 @@ defmodule Yecc.Util.Action do
   end
 
   defp rule(rule_pointer) do
-    %Rule{n: n, symbols: symbols} = Table.get_rule_pointer_to_rule(rule_pointer)
+    {^rule_pointer, %Rule{n: n, symbols: symbols}} = Table.get_rule_pointer_to_rule(rule_pointer)
     {symbols, n}
   end
 

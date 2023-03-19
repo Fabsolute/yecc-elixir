@@ -9,7 +9,7 @@ defmodule Yecc.Util.Code do
 
   def decode_goto() do
     Table.pop_all_goto()
-    |> Enum.map(fn {{from, symbol, next}} -> {{from, decode_symbol(symbol), next}} end)
+    |> Enum.map(fn {{from, symbol, next}} -> {{from, decode_symbol(symbol)}, next} end)
     |> Table.store_goto()
   end
 

@@ -30,7 +30,9 @@ defmodule Yecc do
       &prepare_attributes/1,
       &Util.create_symbol_table/1,
       &Util.create_codeds/1,
-      &Util.compute_states/1
+      &Util.compute_states/1,
+      &Util.create_precedence_table/1,
+      &Util.compute_parse_actions/1
     ]
     |> Enum.each(& &1.(env.module))
 
@@ -41,7 +43,8 @@ defmodule Yecc do
         :codeds,
         :rule_pointer_rhs,
         :rule_pointer_info,
-        :get_states
+        :get_states,
+        :parse_actions
       ]
       |> Enum.map(&{&1, Util.Table.get_content(&1)})
 

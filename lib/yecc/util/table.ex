@@ -29,8 +29,12 @@ defmodule Yecc.Util.Table do
     get(@table_instance, :n_states)
   end
 
-  def get_states() do
+  def get_instance_state_table() do
     get(@table_instance, :state_table)
+  end
+
+  def get_instance_parse_actions() do
+    get(@table_instance, :parse_actions)
   end
 
   def get_coded(key) do
@@ -71,6 +75,10 @@ defmodule Yecc.Util.Table do
 
   def store_instance_n(value) do
     store(@table_instance, :n_states, value)
+  end
+
+  def store_instance_parse_actions(value) do
+    store(@table_instance, :parse_actions, value)
   end
 
   def store_instance_state_table(value) do
@@ -120,6 +128,10 @@ defmodule Yecc.Util.Table do
     g
   end
 
+  def get_all_goto() do
+    :ets.tab2list(@table_goto)
+  end
+
   def lookup_element_state_id(state_id) do
     :ets.lookup_element(@table_state_id, state_id, 2)
   end
@@ -161,13 +173,17 @@ defmodule Yecc.Util.Table do
   def lookup_action(n) do
     try do
       :ets.lookup(@table_action, n) |> hd()
-    catch
+    rescue
       _ -> :undefined
     end
   end
 
   def get_content(:symbol_table) do
     :ets.tab2list(@table_symbol)
+  end
+
+  def get_content(:parse_actions) do
+    get(@table_instance, :parse_actions)
   end
 
   def get_content(:rule_pointer_to_rule) do
@@ -207,7 +223,7 @@ defmodule Yecc.Util.Table do
   end
 
   defp get(name, key, n) when is_atom(key) and is_integer(n) do
-    Agent.get(name, &(Keyword.get(&1, key) |> elem(n - 1)))
+    Agent.get(name, &(Keyword.get(&1, key) |> get_content(n - 1)))
   end
 
   defp store(name, key, value) when is_atom(key) do
@@ -221,4 +237,7 @@ defmodule Yecc.Util.Table do
   defp store(name, value) do
     Agent.update(name, fn _ -> value end)
   end
+
+  defp get_content(content, n) when is_tuple(content), do: elem(content, n)
+  defp get_content(content, n) when is_list(content), do: Enum.at(content, n)
 end
