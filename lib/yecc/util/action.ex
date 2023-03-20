@@ -11,6 +11,11 @@ defmodule Yecc.Util.Action do
     |> Table.store_instance_parse_actions()
   end
 
+  def rule(rule_pointer) do
+    {^rule_pointer, %Rule{n: n, symbols: symbols}} = Table.get_rule_pointer_to_rule(rule_pointer)
+    {symbols, n}
+  end
+
   defp compute_parse_actions(n, state_actions) when n < 0, do: state_actions
 
   defp compute_parse_actions(n, state_actions) do
@@ -79,11 +84,6 @@ defmodule Yecc.Util.Action do
           compute_parse_actions1(items, n)
         end
     end
-  end
-
-  defp rule(rule_pointer) do
-    {^rule_pointer, %Rule{n: n, symbols: symbols}} = Table.get_rule_pointer_to_rule(rule_pointer)
-    {symbols, n}
   end
 
   defp get_precedence(symbols) do

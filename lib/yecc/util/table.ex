@@ -10,6 +10,7 @@ defmodule Yecc.Util.Table do
   @table_precedences :yecc_table_precedences
   @table_action :yecc_table_action
   @table_closure :yecc_table_closure
+  @table_reduce :yecc_table_reduce
 
   def initialize_tables() do
     :ets.new(@table_state_id, [:set, :named_table])
@@ -23,6 +24,11 @@ defmodule Yecc.Util.Table do
     Agent.start_link(fn -> nil end, name: @table_coded)
     Agent.start_link(fn -> Map.new() end, name: @table_closure)
     Agent.start_link(fn -> Keyword.new() end, name: @table_instance)
+    Agent.start_link(fn -> {[], []} end, name: @table_reduce)
+  end
+
+  def get_table_instance_root() do
+    get(@table_instance, :root)
   end
 
   def get_instance_n() do
@@ -65,6 +71,14 @@ defmodule Yecc.Util.Table do
     Agent.get_and_update(@table_closure, fn state -> {state, Map.new()} end) |> Map.to_list()
   end
 
+  def store_reduce_reduce(n, symbol) do
+    store_reduce(n, symbol, 0)
+  end
+
+  def store_shift_reduce(n, symbol) do
+    store_reduce(n, symbol, 1)
+  end
+
   def store_closure(key, value) do
     store(@table_closure, key, value)
   end
@@ -75,6 +89,10 @@ defmodule Yecc.Util.Table do
 
   def store_instance_n(value) do
     store(@table_instance, :n_states, value)
+  end
+
+  def store_instance_root(value) do
+    store(@table_instance, :root, value)
   end
 
   def store_instance_parse_actions(value) do
@@ -236,6 +254,10 @@ defmodule Yecc.Util.Table do
 
   defp store(name, value) do
     Agent.update(name, fn _ -> value end)
+  end
+
+  defp store_reduce(n, symbol, table_id) do
+    Agent.update(@table_reduce, &put_elem(&1, table_id, [{n, symbol} | elem(&1, table_id)]))
   end
 
   defp get_content(content, n) when is_tuple(content), do: elem(content, n)

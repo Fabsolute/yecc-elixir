@@ -27,8 +27,14 @@ defmodule Yecc.Util.States do
     Code.decode_goto()
   end
 
-  @spec is_terminal?(integer) :: boolean
   def is_terminal?(element) when is_integer(element), do: element >= 0
+
+  def family(list) do
+    list
+    |> :sofs.relation()
+    |> :sofs.relation_to_family()
+    |> :sofs.to_external()
+  end
 
   defp lookup_state(state_table, n) do
     elem(state_table, n)
@@ -336,7 +342,6 @@ defmodule Yecc.Util.States do
   defp compute_closure1(null, _), do: null
 
   defp compute_state(seed) do
-
     for {look_ahead, rule_pointer} <- seed do
       Table.store_closure(rule_pointer, look_ahead)
     end
@@ -493,12 +498,5 @@ defmodule Yecc.Util.States do
 
   defp upd_first(ts, nt, left_corner) do
     Map.update!(left_corner, nt, &Bitwise.set_union(&1, ts))
-  end
-
-  defp family(list) do
-    list
-    |> :sofs.relation()
-    |> :sofs.relation_to_family()
-    |> :sofs.to_external()
   end
 end

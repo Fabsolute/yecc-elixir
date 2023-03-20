@@ -45,6 +45,7 @@ defmodule Yecc.Util do
   def get_names([{name, rest}]), do: [name, rest]
 
   def create_symbol_table(module) do
+    root = Module.get_attribute(module, :root)
     symbol_empty = Module.get_attribute(module, :symbol_empty)
     symbol_end = Module.get_attribute(module, :symbol_end)
     terminals = [symbol_empty, symbol_end | tl(Module.get_attribute(module, :terminals))]
@@ -55,6 +56,7 @@ defmodule Yecc.Util do
         Enum.zip(nonterminals, -1..-length(nonterminals))
 
     Table.store_symbols(tables)
+    Table.store_instance_root(root)
   end
 
   def create_codeds(module) do
