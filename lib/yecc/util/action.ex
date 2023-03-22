@@ -58,7 +58,7 @@ defmodule Yecc.Util.Action do
           decoded_symbol = Code.decode_symbol(symbol)
           {[head | _], _} = rule(rule_pointer)
 
-          prec =
+          precedence =
             case daugters do
               [] -> get_precedence([decoded_symbol, head])
               _ -> get_precedence([decoded_symbol])
@@ -75,7 +75,7 @@ defmodule Yecc.Util.Action do
              %Shift{
                state: goto(n, decoded_symbol),
                pos: pos,
-               precedence: prec,
+               precedence: precedence,
                rule_number: rule_pointer
              }}
             | compute_parse_actions1(items, n)

@@ -32,7 +32,9 @@ defmodule Yecc do
       &Util.create_codeds/1,
       &Util.compute_states/1,
       &Util.create_precedence_table/1,
-      &Util.compute_parse_actions/1
+      &Util.compute_parse_actions/1,
+      &Util.action_conflicts/1,
+      &Util.generate_functions/1
     ]
     |> Enum.each(& &1.(env.module))
 
@@ -116,11 +118,12 @@ defmodule Yecc do
         Util.get_names(context)
         |> List.pop_at(-1)
 
-      precedence_name = unquote(precedence_name)
+      precedences =
+        Enum.map(context, &{&1, precedence, unquote(precedence_name)})
+        |> Macro.escape()
 
       quote do
-        @precedences @precedences ++
-                       [{unquote(precedence_name), unquote(precedence), unquote(context)}]
+        @precedences @precedences ++ unquote(precedences)
       end
     end
   end
@@ -155,7 +158,7 @@ defmodule Yecc do
       raise "terminals and nonterminals should be unique"
     end
 
-    precedences = Enum.flat_map(precedences, &elem(&1, 2))
+    precedences = Enum.map(precedences, &elem(&1, 0))
 
     if precedences != Enum.uniq(precedences) do
       raise "precedences should be unique"

@@ -190,7 +190,7 @@ defmodule Yecc.Util.Table do
 
   def lookup_action(n) do
     try do
-      :ets.lookup(@table_action, n) |> hd()
+      :ets.lookup(@table_action, n) |> hd() |> elem(1)
     rescue
       _ -> :undefined
     end

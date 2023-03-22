@@ -3,21 +3,24 @@ defmodule Yecc.Util.Conflict do
   alias Yecc.Util.{Table, States, Action}
 
   def action_conflicts() do
-    Table.get_instance_parse_actions()
-    |> List.foldl({%Ctx{}, []}, fn {n, actions}, {ctx, state_actions} ->
-      {_, actions} =
-        Enum.flat_map(actions, fn {look_ahead, action} ->
-          Enum.map(look_ahead, &{&1, action})
-        end)
-        |> States.family()
-        |> List.foldl({ctx, []}, fn {terminal, as}, {ctx, acts} ->
-          ctx = %{ctx | terminal: terminal, state_n: n}
-          {action, ctx} = action_conflicts(as, ctx)
-          {ctx, [{action, terminal} | acts]}
-        end)
+    {_, actions} =
+      Table.get_instance_parse_actions()
+      |> List.foldl({%Ctx{}, []}, fn {n, actions}, {ctx, state_actions} ->
+        {ctx, actions} =
+          Enum.flat_map(actions, fn {look_ahead, action} ->
+            Enum.map(look_ahead, &{&1, action})
+          end)
+          |> States.family()
+          |> List.foldl({ctx, []}, fn {terminal, as}, {ctx, acts} ->
+            ctx = %{ctx | terminal: terminal, state_n: n}
+            {action, ctx} = action_conflicts(as, ctx)
+            {ctx, [{action, terminal} | acts]}
+          end)
 
-      [{n, actions |> States.family() |> inverse()} | state_actions]
-    end)
+        {ctx, [{n, actions |> States.family() |> inverse()} | state_actions]}
+      end)
+
+    actions
     |> Enum.reverse()
     |> Table.store_instance_parse_actions()
   end
