@@ -10,6 +10,7 @@ defmodule Yecc do
       @symbol_end :__end__
       @nonterminals []
       @terminals [@symbol_empty]
+      @aliases []
 
       @precedences []
       @rules []
@@ -109,6 +110,13 @@ defmodule Yecc do
 
     quote do
       @terminals @terminals ++ unquote(context)
+    end
+  end
+
+  defmacro known_as(context) do
+    [{name, _, [value]}] = context |> Util.clear_context()
+    quote do
+      @aliases @aliases ++ [unquote(name), unquote(value)]
     end
   end
 

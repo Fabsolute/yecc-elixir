@@ -1,4 +1,4 @@
-defmodule YeccGrammer do
+defmodule YeccGrammar do
   use Yecc
 
   root grammar
@@ -58,7 +58,7 @@ defmodule YeccGrammer do
   token ~> comma do {:comma, anno_of(@1)} end   # manner, because they are also special symbols of the metagrammar
 
   defp symbol(symbol) do
-    YeccGrammer.Symbol.new(value_of(symbol),anno_of(symbol))
+    YeccGrammar.Symbol.new(value_of(symbol),anno_of(symbol))
   end
 
   defp value_of(token) do

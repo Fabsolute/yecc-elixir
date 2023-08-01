@@ -36,6 +36,14 @@ defmodule Yecc.Util.States do
     |> :sofs.to_external()
   end
 
+  def sofs_family_with_domain(relations, domain) do
+    domain_function = :sofs.constant_function(domain, :sofs.from_term([]))
+
+    :sofs.restriction(relations, domain)
+    |> :sofs.relation_to_family()
+    |> :sofs.family_union(domain_function)
+  end
+
   defp lookup_state(state_table, n) do
     elem(state_table, n)
   end
@@ -482,14 +490,6 @@ defmodule Yecc.Util.States do
     |> :sofs.relation()
     |> sofs_family_with_domain(:sofs.set(domain))
     |> :sofs.to_external()
-  end
-
-  defp sofs_family_with_domain(relations, domain) do
-    domain_function = :sofs.constant_function(domain, :sofs.from_term([]))
-
-    :sofs.restriction(relations, domain)
-    |> :sofs.relation_to_family()
-    |> :sofs.family_union(domain_function)
   end
 
   defp suffixes([0], :check_empty), do: [[], []]
