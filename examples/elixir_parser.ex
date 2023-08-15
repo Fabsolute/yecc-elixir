@@ -7,47 +7,47 @@ defmodule ElixirParser do
   # one coming from empty_paren on stab
   expect 3
 
-  nonterminals do
-    grammar expr_list
-    expr container_expr block_expr access_expr
-    no_parens_expr no_parens_zero_expr no_parens_one_expr no_parens_one_ambig_expr
-    bracket_expr bracket_at_expr bracket_arg matched_expr unmatched_expr
-    unmatched_op_expr matched_op_expr no_parens_op_expr no_parens_many_expr
-    comp_op_eol at_op_eol unary_op_eol and_op_eol or_op_eol capture_op_eol
-    dual_op_eol mult_op_eol power_op_eol concat_op_eol xor_op_eol pipe_op_eol
-    stab_op_eol arrow_op_eol match_op_eol when_op_eol in_op_eol in_match_op_eol
-    type_op_eol rel_op_eol range_op_eol ternary_op_eol
-    open_paren close_paren empty_paren eoe
-    list list_args open_bracket close_bracket
-    tuple open_curly close_curly
-    bitstring open_bit close_bit
-    map map_op map_close map_args struct_expr struct_op
-    assoc_op_eol assoc_expr assoc_base assoc_update assoc_update_kw assoc
-    container_args_base container_args
-    call_args_parens_expr call_args_parens_base call_args_parens parens_call
-    call_args_no_parens_one call_args_no_parens_ambig call_args_no_parens_expr
-    call_args_no_parens_comma_expr call_args_no_parens_all call_args_no_parens_many
-    call_args_no_parens_many_strict
-    stab stab_eoe stab_expr stab_op_eol_and_expr stab_parens_many
-    kw_eol kw_base kw_data kw_call call_args_no_parens_kw_expr call_args_no_parens_kw
-    dot_op dot_alias dot_bracket_identifier dot_call_identifier
-    dot_identifier dot_op_identifier dot_do_identifier dot_paren_identifier
-    do_block fn_eoe do_eoe end_eoe block_eoe block_item block_list
-  end
+  nonterminals [
+    :grammar, :expr_list,
+    :expr, :container_expr, :block_expr, :access_expr,
+    :no_parens_expr, :no_parens_zero_expr, :no_parens_one_expr, :no_parens_one_ambig_expr,
+    :bracket_expr, :bracket_at_expr, :bracket_arg, :matched_expr, :unmatched_expr,
+    :unmatched_op_expr, :matched_op_expr, :no_parens_op_expr, :no_parens_many_expr,
+    :comp_op_eol, :at_op_eol, :unary_op_eol, :and_op_eol, :or_op_eol, :capture_op_eol,
+    :dual_op_eol, :mult_op_eol, :power_op_eol, :concat_op_eol, :xor_op_eol, :pipe_op_eol,
+    :stab_op_eol, :arrow_op_eol, :match_op_eol, :when_op_eol, :in_op_eol, :in_match_op_eol,
+    :type_op_eol, :rel_op_eol, :range_op_eol, :ternary_op_eol,
+    :open_paren, :close_paren, :empty_paren, :eoe,
+    :list, :list_args, :open_bracket, :close_bracket,
+    :tuple, :open_curly, :close_curly,
+    :bitstring, :open_bit, :close_bit,
+    :map, :map_op, :map_close, :map_args, :struct_expr, :struct_op,
+    :assoc_op_eol, :assoc_expr, :assoc_base, :assoc_update, :assoc_update_kw, :assoc,
+    :container_args_base, :container_args,
+    :call_args_parens_expr, :call_args_parens_base, :call_args_parens, :parens_call,
+    :call_args_no_parens_one, :call_args_no_parens_ambig, :call_args_no_parens_expr,
+    :call_args_no_parens_comma_expr, :call_args_no_parens_all, :call_args_no_parens_many,
+    :call_args_no_parens_many_strict,
+    :stab, :stab_eoe, :stab_expr, :stab_op_eol_and_expr, :stab_parens_many,
+    :kw_eol, :kw_base, :kw_data, :kw_call, :call_args_no_parens_kw_expr, :call_args_no_parens_kw,
+    :dot_op, :dot_alias, :dot_bracket_identifier, :dot_call_identifier,
+    :dot_identifier, :dot_op_identifier, :dot_do_identifier, :dot_paren_identifier,
+    :do_block, :fn_eoe, :do_eoe, :end_eoe, :block_eoe, :block_item, :block_list
+  ]
 
-  terminals do
-    identifier kw_identifier kw_identifier_safe kw_identifier_unsafe bracket_identifier
-    paren_identifier do_identifier block_identifier op_identifier
-    ex_fn ex_end alias
-    atom atom_quoted atom_safe atom_unsafe bin_string list_string sigil
-    bin_heredoc list_heredoc
-    comp_op at_op unary_op and_op or_op arrow_op match_op in_op in_match_op
-    type_op dual_op mult_op power_op concat_op range_op xor_op pipe_op stab_op when_op
-    capture_int capture_op assoc_op rel_op ternary_op dot_call_op
-    ex_true ex_false ex_nil ex_do eol pn_semicolon pn_comma pn_dot
-    pn_rparen pn_lparen pn_rbracket pn_lbracket pn_rbrace pn_lbrace pn_rshift pn_lshift pn_map pm_percent
-    int flt char
-  end
+  terminals [
+    :identifier, :kw_identifier, :kw_identifier_safe, :kw_identifier_unsafe, :bracket_identifier,
+    :paren_identifier, :do_identifier, :block_identifier, :op_identifier,
+    :fn, :end, :alias,
+     :atom, :atom_quoted, :atom_safe, :atom_unsafe, :bin_string, :list_string, :sigil,
+     :bin_heredoc, :list_heredoc,
+     :comp_op, :at_op, :unary_op, :and_op, :or_op, :arrow_op, :match_op, :in_op, :in_match_op,
+     :type_op, :dual_op, :mult_op, :power_op, :concat_op, :range_op, :xor_op, :pipe_op, :stab_op, :when_op,
+     :capture_int, :capture_op, :assoc_op, :rel_op, :ternary_op, :dot_call_op,
+     :true, :false, :nil, :do, :eol, :';', :',', :'.',
+     :'(', :')', :'[', :']', :'{', :'}', :'<<', :'>>', :'%{}', :'%',
+     :int, :flt, :char
+  ]
 
   # Changes in ops and precedence should be reflected on:
   #
@@ -59,43 +59,67 @@ defmodule ElixirParser do
   # than all others, its entry in the table is only to support the
   # %{user | foo => bar} syntax
 
-  left      ex_do            5
-  right     stab_op_eol     10 # ~>
-  left      ex_comma        20
-  left      in_match_op_eol 40 # <-, \\ (allowed in matches along =)
-  right     when_op_eol     50 # when
-  right     type_op_eol     60 # do:
-  right     pipe_op_eol     70 # |
-  right     assoc_op_eol    80 # =>
-  nonassoc  capture_op_eol  90 # &
-  right     match_op_eol   100 # =
-  left      or_op_eol      120 # ||, |||, or
-  left      and_op_eol     130 # &&, &&&, and
-  left      comp_op_eol    140 # ==, !=, =~, ===, !==
-  left      rel_op_eol     150 # <, >, <=, >=
-  left      arrow_op_eol   160 # |>, <<<, >>>, <<~, ~>>, <~, ~>, <~>, <|>
-  left      in_op_eol      170 # in, not in
-  left      xor_op_eol     180 # ^^^
-  right     ternary_op_eol 190 # //
-  right     concat_op_eol  200 # ++, --, +++, ---, <>
-  right     range_op_eol   200 # .
-  left      dual_op_eol    210 # +, -
-  left      mult_op_eol    220 # *, /
-  left      power_op_eol   230 # **
-  nonassoc  unary_op_eol   300 # +, -, !, ^, not, ~~~
-  left      dot_call_op    310
-  left      dot_op         310 #
-  nonassoc  at_op_eol      320 # @
-  nonassoc  dot_identifier 330
+  left      :do,               5
+  # ~>
+  right     :stab_op_eol,     10
+  left      :",",             20
+  # <-, \\ (allowed in matches along =)
+  left      :in_match_op_eol, 40
+  # when
+  right     :when_op_eol,     50
+  # ::
+  right     :type_op_eol,     60
+  # |
+  right     :pipe_op_eol,     70
+  # =>
+  right     :assoc_op_eol,    80
+  # &
+  nonassoc  :capture_op_eol,  90
+  # =
+  right     :match_op_eol,   100
+  # ||, |||, or
+  left      :or_op_eol,      120
+  # &&, &&&, and
+  left      :and_op_eol,     130
+  # ==, !=, =~, ===, !==
+  left      :comp_op_eol,    140
+  # <, >, <=, >=
+  left      :rel_op_eol,     150
+  # |>, <<<, >>>, <<~, ~>>, <~, ~>, <~>, <|>
+  left      :arrow_op_eol,   160
+  # in, not in
+  left      :in_op_eol,      170
+  # ^^^
+  left      :xor_op_eol,     180
+  # //
+  right     :ternary_op_eol, 190
+  # ++, --, +++, ---, <>
+  right     :concat_op_eol,  200
+  # ..
+  right     :range_op_eol,   200
+  # +, -
+  left      :dual_op_eol,    210
+  # *, /
+  left      :mult_op_eol,    220
+  # **
+  left      :power_op_eol,   230
+  # +, -, !, ^, not, ~~~
+  nonassoc  :unary_op_eol,   300
+  left      :dot_call_op,    310
+  # .
+  left      :dot_op,         310
+  # @
+  nonassoc  :at_op_eol,      320
+  nonassoc  :dot_identifier, 330
 
 
   # MAIN FLOW OF EXPRESSIONS
-  grammar ~> eoe do {:__block__, meta_from_token(@1), []} end
-  grammar ~> expr_list do build_block(reverse(@1)) end
-  grammar ~> eoe expr_list do build_block(reverse(@2)) end
-  grammar ~> expr_list eoe do build_block(reverse(@1)) end
-  grammar ~> eoe expr_list eoe do build_block(reverse(@2)) end
-  grammar ~> __empty__ do {:__block__, [], []} end
+  defr grammar({:eoe, eoe}), do: {:__block__, meta_from_token(eoe), []}
+  defr grammar({:expr_list, expr_list}), do: build_block(reverse(expr_list))
+  defr grammar(:eoe, {:expr_list, expr_list}), do: build_block(reverse(expr_list))
+  defr grammar({:expr_list, expr_list}, :eoe), do: build_block(reverse(expr_list))
+  defr grammar(:eoe, {:expr_list, expr_list}, :eoe), do: build_block(reverse(expr_list))
+  defr grammar(:__empty__), do: {:__block__, [], []}
 
   # Note expressions are on reverse order
   expr_list ~> expr do [@1] end

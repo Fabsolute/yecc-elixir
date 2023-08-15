@@ -27,22 +27,19 @@ defmodule Yecc.Util do
   def clear_context({:__block__, _, args}), do: args
   def clear_context(rest), do: [rest]
 
-  def get_names({name, _, nil}), do: [name]
+  def parse_parameters(values), do: parse_parameters(values, 0)
 
-  def get_names({name, _, [[do: context]]}) do
-    [name, context]
+  defp parse_parameters([{h, v} | t], index) when is_atom(h) do
+    {values, parameters} = parse_parameters(t, index + 1)
+    {[{index, v} | values], [h | parameters]}
   end
 
-  def get_names({name, _, [arg, [do: context]]}) do
-    [name | get_names(arg)] ++ [context]
+  defp parse_parameters([h | t], index) when is_atom(h) do
+    {values, parameters} = parse_parameters(t, index + 1)
+    {values, [h | parameters]}
   end
 
-  def get_names({name, _, [arg]}) do
-    [name | get_names(arg)]
-  end
-
-  def get_names(val) when is_integer(val), do: [val]
-  def get_names([{name, rest}]), do: [name, rest]
+  defp parse_parameters([], _), do: {[], []}
 
   def create_symbol_table(module) do
     root = Module.get_attribute(module, :root)

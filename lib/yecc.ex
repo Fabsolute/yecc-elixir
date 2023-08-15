@@ -3,14 +3,11 @@ defmodule Yecc do
   alias Yecc.Struct.Rule
 
   defmacro __using__(opts) do
-    file = Keyword.get(opts, :file)
-
     quote do
       @symbol_empty :__empty__
       @symbol_end :__end__
       @nonterminals []
       @terminals [@symbol_empty]
-      @aliases []
 
       @precedences []
       @rules []
@@ -18,8 +15,6 @@ defmodule Yecc do
 
       import unquote(__MODULE__)
       @before_compile unquote(__MODULE__)
-
-      load(unquote(file))
     end
   end
 
@@ -70,24 +65,21 @@ defmodule Yecc do
     end
   end
 
-  defmacro {name, _meta, nil} ~> context do
-    {context, right} =
-      Util.get_names(context)
-      |> List.pop_at(-1)
+  defmacro defr({name, _meta, parameters}, expr \\ nil) do
+    {values, symbols} = Util.parse_parameters(parameters)
+    values |> IO.inspect(label: :values)
+    symbols |> IO.inspect(label: :symbols)
 
-    context = Macro.escape(context)
+    expr  = Macro.escape(expr)
 
     quote do
-      @rules @rules ++
-               [%Rule{symbols: [unquote(name) | unquote(right)], tokens: unquote(context)}]
+      @rules @rules ++ [%Rule{symbols: [unquote(name) | unquote(symbols)], tokens: unquote(expr)}]
     end
   end
 
-  defmacro root(context) do
-    [context] = Util.get_names(context)
-
+  defmacro root(name) do
     quote do
-      @root unquote(context)
+      @root unquote(name)
     end
   end
 
@@ -97,52 +89,26 @@ defmodule Yecc do
     end
   end
 
-  defmacro nonterminals(context) do
-    context = context |> Util.clear_context() |> Enum.flat_map(&Util.get_names/1)
-
+  defmacro nonterminals(names) do
     quote do
-      @nonterminals @nonterminals ++ unquote(context)
+      @nonterminals @nonterminals ++ unquote(names)
     end
   end
 
-  defmacro terminals(context) do
-    context = context |> Util.clear_context() |> Enum.flat_map(&Util.get_names/1)
-
+  defmacro terminals(names) do
     quote do
-      @terminals @terminals ++ unquote(context)
-    end
-  end
-
-  defmacro known_as(context) do
-    [{name, _, [value]}] = context |> Util.clear_context()
-    quote do
-      @aliases @aliases ++ [unquote(name), unquote(value)]
+      @terminals @terminals ++ unquote(names)
     end
   end
 
   for precedence_name <- [:right, :left, :nonassoc, :unary] do
-    defmacro unquote(:"#{precedence_name}")(context) do
-      {precedence, context} =
-        Util.get_names(context)
-        |> List.pop_at(-1)
-
-      precedences =
-        Enum.map(context, &{&1, precedence, unquote(precedence_name)})
-        |> Macro.escape()
-
+    defmacro unquote(:"#{precedence_name}")(name, precedence) do
+      precedence_name = unquote(precedence_name)
       quote do
-        @precedences @precedences ++ unquote(precedences)
+        @precedences @precedences ++
+                       [{unquote(name), unquote(precedence), unquote(precedence_name)}]
       end
     end
-  end
-
-  defmacro load(nil), do: nil
-
-  defmacro load(file) do
-    [Path.dirname(__ENV__.file), file]
-    |> Path.join()
-    |> File.read!()
-    |> Code.string_to_quoted!()
   end
 
   defp check_grammar(module) do
