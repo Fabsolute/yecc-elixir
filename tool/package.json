@@ -1,0 +1,18 @@
+{
+  "name": "yrl2yecc",
+  "version": "1.0.0",
+  "main": "src/yecc.ts",
+  "license": "MIT",
+  "scripts": {
+    "start": "ts-node src/yecc.ts",
+    "dev": "node --loader ts-node/esm --inspect src/yecc.ts"
+  },
+  "dependencies": {
+    "@types/node": "^20.5.3",
+    "typescript-parsec": "^0.3.4"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  }
+}

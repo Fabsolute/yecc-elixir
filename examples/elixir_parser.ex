@@ -1,10 +1,8 @@
 defmodule ElixirParser do
   use Yecc
 
-  root grammar
+  root :grammar
 
-  # Two shift/reduce conflicts coming from call_args_parens and
-  # one coming from empty_paren on stab
   expect 3
 
   nonterminals [
@@ -186,70 +184,35 @@ defmodule ElixirParser do
     :char
   ]
 
-  # Changes in ops and precedence should be reflected on:
-  #
-  #   1. lib/elixir/lib/code/identifier.ex
-  #   2. lib/elixir/pages/operators.md
-  #   3. lib/iex/lib/iex/evaluator.ex
-  #
-  # Note though the operator => in practice has lower precedence
-  # than all others, its entry in the table is only to support the
-  # %{user | foo => bar} syntax
-
   left :do, 5
-  # ~>
   right :stab_op_eol, 10
   left :",", 20
-  # <-, \\ (allowed in matches along =)
   left :in_match_op_eol, 40
-  # when
   right :when_op_eol, 50
-  # ::
   right :type_op_eol, 60
-  # |
   right :pipe_op_eol, 70
-  # =>
   right :assoc_op_eol, 80
-  # &
   nonassoc :capture_op_eol, 90
-  # =
   right :match_op_eol, 100
-  # ||, |||, or
   left :or_op_eol, 120
-  # &&, &&&, and
   left :and_op_eol, 130
-  # ==, !=, =~, ===, !==
   left :comp_op_eol, 140
-  # <, >, <=, >=
   left :rel_op_eol, 150
-  # |>, <<<, >>>, <<~, ~>>, <~, ~>, <~>, <|>
   left :arrow_op_eol, 160
-  # in, not in
   left :in_op_eol, 170
-  # ^^^
   left :xor_op_eol, 180
-  # //
   right :ternary_op_eol, 190
-  # ++, --, +++, ---, <>
   right :concat_op_eol, 200
-  # ..
   right :range_op_eol, 200
-  # +, -
   left :dual_op_eol, 210
-  # *, /
   left :mult_op_eol, 220
-  # **
   left :power_op_eol, 230
-  # +, -, !, ^, not, ~~~
   nonassoc :unary_op_eol, 300
   left :dot_call_op, 310
-  # .
   left :dot_op, 310
-  # @
   nonassoc :at_op_eol, 320
   nonassoc :dot_identifier, 330
 
-  # MAIN FLOW OF EXPRESSIONS
   defr grammar({:eoe, eoe}), do: {:__block__, meta_from_token(eoe), []}
   defr grammar({:expr_list, expr_list}), do: build_block(reverse(expr_list))
   defr grammar(:eoe, {:expr_list, expr_list}), do: build_block(reverse(expr_list))
@@ -257,7 +220,6 @@ defmodule ElixirParser do
   defr grammar(:eoe, {:expr_list, expr_list}, :eoe), do: build_block(reverse(expr_list))
   defr grammar(:__empty__), do: {:__block__, [], []}
 
-  # Note expressions are on reverse order
   defr expr_list({:expr, expr}), do: [expr]
 
   defr expr_list({:expr_list, expr_list}, {:eoe, eoe}, {:expr, expr}) do
@@ -268,98 +230,78 @@ defmodule ElixirParser do
   defr expr({:no_parens_expr, no_parens_expr}), do: no_parens_expr
   defr expr({:unmatched_expr, unmatched_expr}), do: unmatched_expr
 
-  # ## In Elixir we have three main call syntaxes: with parentheses,
-  # ## without parentheses and with do blocks. They are represented
-  # ## in the AST as matched, no_parens and unmatched
-  # ##
-  # ## Calls without parentheses are further divided according to how
-  # ## problematic they are:
-  # ##
-  # ## (a) no_parens_one: a call with one unproblematic argument
-  # ## (for example, `f a` or `f g a` and similar) (includes unary operators)
-  # ##
-  # ## (b) no_parens_many: a call with several arguments (for example, `f a, b`)
-  # ##
-  # ## (c) no_parens_one_ambig: a call with one argument which is
-  # ## itself a no_parens_many or no_parens_one_ambig (for example, `f g a, b`,
-  # ## `f g h a, b` and similar)
-  # ##
-  # ## Note, in particular, that no_parens_one_ambig expressions are
-  # ## ambiguous and are interpreted such that the outer function has
-  # ## arity 1. For instance, `f g a, b` is interpreted as `f(g(a, b))` rather
-  # ## than `f(g(a), b)`. Hence the name, no_parens_one_ambig
-  # ##
-  # ## The distinction is required because we can't, for example, have
-  # ## a function call with a do block as argument inside another do
-  # ## block call, unless there are parentheses:
-  # ##
-  # ##   if if true do true else false end do  #=> invalid
-  # ##   if(if true do true else false end) do #=> valid
-  # ##
-  # ## Similarly, it is not possible to nest calls without parentheses
-  # ## if their arity is more than 1:
-  # ##
-  # ##   foo a, bar b, c  #=> invalid
-  # ##   foo(a, bar b, c) #=> invalid
-  # ##   foo bar a, b     #=> valid
-  # ##   foo a, bar(b, c) #=> valid
-  # ##
-  # ## So the different grammar rules need to take into account
-  # ## if calls without parentheses are do blocks in particular
-  # ## segments and act accordingly
+  defr matched_expr({:matched_expr, matched_expr}, {:matched_op_expr, matched_op_expr}) do
+    build_op(matched_expr, matched_op_expr)
+  end
 
-  defr matched_expr({:matched_expr, matched_expr}, {:matched_op_expr, matched_op_expr}),
-    do: build_op(matched_expr, matched_op_expr)
+  defr matched_expr({:unary_op_eol, unary_op_eol}, {:matched_expr, matched_expr}) do
+    build_unary_op(unary_op_eol, matched_expr)
+  end
 
-  defr matched_expr({:unary_op_eol, unary_op_eol}, {:matched_expr, matched_expr}),
-    do: build_unary_op(unary_op_eol, matched_expr)
+  defr matched_expr({:at_op_eol, at_op_eol}, {:matched_expr, matched_expr}) do
+    build_unary_op(at_op_eol, matched_expr)
+  end
 
-  defr matched_expr({:at_op_eol, at_op_eol}, {:matched_expr, matched_expr}),
-    do: build_unary_op(at_op_eol, matched_expr)
-
-  defr matched_expr({:capture_op_eol, capture_op_eol}, {:matched_expr, matched_expr}),
-    do: build_unary_op(capture_op_eol, matched_expr)
+  defr matched_expr({:capture_op_eol, capture_op_eol}, {:matched_expr, matched_expr}) do
+    build_unary_op(capture_op_eol, matched_expr)
+  end
 
   defr matched_expr({:no_parens_one_expr, no_parens_one_expr}), do: no_parens_one_expr
   defr matched_expr({:no_parens_zero_expr, no_parens_zero_expr}), do: no_parens_zero_expr
   defr matched_expr({:access_expr, access_expr}), do: access_expr
 
-  defr matched_expr(:access_expr, {:kw_identifier, kw_identifier}),
-    do: error_invalid_kw_identifier(kw_identifier)
+  defr matched_expr(:access_expr, {:kw_identifier, kw_identifier}) do
+    error_invalid_kw_identifier(kw_identifier)
+  end
 
-  defr unmatched_expr({:matched_expr, matched_expr}, {:unmatched_op_expr, unmatched_op_expr}),
-    do: build_op(matched_expr, unmatched_op_expr)
+  defr unmatched_expr({:matched_expr, matched_expr}, {:unmatched_op_expr, unmatched_op_expr}) do
+    build_op(matched_expr, unmatched_op_expr)
+  end
 
-  defr unmatched_expr({:unmatched_expr, unmatched_expr}, {:matched_op_expr, matched_op_expr}),
-    do: build_op(unmatched_expr, matched_op_expr)
+  defr unmatched_expr({:unmatched_expr, unmatched_expr}, {:matched_op_expr, matched_op_expr}) do
+    build_op(unmatched_expr, matched_op_expr)
+  end
 
-  defr unmatched_expr({:unmatched_expr, unmatched_expr}, {:unmatched_op_expr, unmatched_op_expr}),
-    do: build_op(unmatched_expr, unmatched_op_expr)
+  defr unmatched_expr({:unmatched_expr, unmatched_expr}, {:unmatched_op_expr, unmatched_op_expr}) do
+    build_op(unmatched_expr, unmatched_op_expr)
+  end
 
-  defr unmatched_expr({:unary_op_eol, unary_op_eol}, {:expr, expr}),
-    do: build_unary_op(unary_op_eol, expr)
+  defr unmatched_expr({:unmatched_expr, unmatched_expr}, {:no_parens_op_expr, no_parens_op_expr}) do
+    warn_no_parens_after_do_op(no_parens_op_expr)
+    build_op(unmatched_expr, no_parens_op_expr)
+  end
+
+  defr unmatched_expr({:unary_op_eol, unary_op_eol}, {:expr, expr}) do
+    build_unary_op(unary_op_eol, expr)
+  end
 
   defr unmatched_expr({:at_op_eol, at_op_eol}, {:expr, expr}), do: build_unary_op(at_op_eol, expr)
 
-  defr unmatched_expr({:capture_op_eol, capture_op_eol}, {:expr, expr}),
-    do: build_unary_op(capture_op_eol, expr)
+  defr unmatched_expr({:capture_op_eol, capture_op_eol}, {:expr, expr}) do
+    build_unary_op(capture_op_eol, expr)
+  end
 
   defr unmatched_expr({:block_expr, block_expr}), do: block_expr
 
-  defr no_parens_expr({:matched_expr, matched_expr}, {:no_parens_op_expr, no_parens_op_expr}),
-    do: build_op(matched_expr, no_parens_op_expr)
+  defr no_parens_expr({:matched_expr, matched_expr}, {:no_parens_op_expr, no_parens_op_expr}) do
+    build_op(matched_expr, no_parens_op_expr)
+  end
 
-  defr no_parens_expr({:unary_op_eol, unary_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: build_unary_op(unary_op_eol, no_parens_expr)
+  defr no_parens_expr({:unary_op_eol, unary_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    build_unary_op(unary_op_eol, no_parens_expr)
+  end
 
-  defr no_parens_expr({:at_op_eol, at_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: build_unary_op(at_op_eol, no_parens_expr)
+  defr no_parens_expr({:at_op_eol, at_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    build_unary_op(at_op_eol, no_parens_expr)
+  end
 
-  defr no_parens_expr({:capture_op_eol, capture_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: build_unary_op(capture_op_eol, no_parens_expr)
+  defr no_parens_expr({:capture_op_eol, capture_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    build_unary_op(capture_op_eol, no_parens_expr)
+  end
 
-  defr no_parens_expr({:no_parens_one_ambig_expr, no_parens_one_ambig_expr}),
-    do: no_parens_one_ambig_expr
+  defr no_parens_expr({:no_parens_one_ambig_expr, no_parens_one_ambig_expr}) do
+    no_parens_one_ambig_expr
+  end
 
   defr no_parens_expr({:no_parens_many_expr, no_parens_many_expr}), do: no_parens_many_expr
 
@@ -367,200 +309,259 @@ defmodule ElixirParser do
          {:dot_call_identifier, dot_call_identifier},
          {:call_args_parens, call_args_parens},
          {:do_block, do_block}
-       ),
-       do: build_parens(dot_call_identifier, call_args_parens, do_block)
+       ) do
+    build_parens(dot_call_identifier, call_args_parens, do_block)
+  end
 
   defr block_expr(
          {:dot_call_identifier, dot_call_identifier},
          {:call_args_parens, call_args_parens},
          {:call_args_parens, call_args_parens},
          {:do_block, do_block}
-       ),
-       do: build_nested_parens(dot_call_identifier, call_args_parens, call_args_parens, do_block)
+       ) do
+    build_nested_parens(dot_call_identifier, call_args_parens, call_args_parens, do_block)
+  end
 
-  defr block_expr({:dot_do_identifier, dot_do_identifier}, {:do_block, do_block}),
-    do: build_no_parens_do_block(dot_do_identifier, [], do_block)
+  defr block_expr({:dot_do_identifier, dot_do_identifier}, {:do_block, do_block}) do
+    build_no_parens_do_block(dot_do_identifier, [], do_block)
+  end
 
   defr block_expr(
          {:dot_op_identifier, dot_op_identifier},
          {:call_args_no_parens_all, call_args_no_parens_all},
          {:do_block, do_block}
-       ),
-       do: build_no_parens_do_block(dot_op_identifier, call_args_no_parens_all, do_block)
+       ) do
+    build_no_parens_do_block(dot_op_identifier, call_args_no_parens_all, do_block)
+  end
 
   defr block_expr(
          {:dot_identifier, dot_identifier},
          {:call_args_no_parens_all, call_args_no_parens_all},
          {:do_block, do_block}
-       ),
-       do: build_no_parens_do_block(dot_identifier, call_args_no_parens_all, do_block)
+       ) do
+    build_no_parens_do_block(dot_identifier, call_args_no_parens_all, do_block)
+  end
 
-  defr matched_op_expr({:match_op_eol, match_op_eol}, {:matched_expr, matched_expr}),
-    do: {match_op_eol, matched_expr}
+  defr matched_op_expr({:match_op_eol, match_op_eol}, {:matched_expr, matched_expr}) do
+    {match_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:dual_op_eol, dual_op_eol}, {:matched_expr, matched_expr}),
-    do: {dual_op_eol, matched_expr}
+  defr matched_op_expr({:dual_op_eol, dual_op_eol}, {:matched_expr, matched_expr}) do
+    {dual_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:mult_op_eol, mult_op_eol}, {:matched_expr, matched_expr}),
-    do: {mult_op_eol, matched_expr}
+  defr matched_op_expr({:mult_op_eol, mult_op_eol}, {:matched_expr, matched_expr}) do
+    {mult_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:power_op_eol, power_op_eol}, {:matched_expr, matched_expr}),
-    do: {power_op_eol, matched_expr}
+  defr matched_op_expr({:power_op_eol, power_op_eol}, {:matched_expr, matched_expr}) do
+    {power_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:concat_op_eol, concat_op_eol}, {:matched_expr, matched_expr}),
-    do: {concat_op_eol, matched_expr}
+  defr matched_op_expr({:concat_op_eol, concat_op_eol}, {:matched_expr, matched_expr}) do
+    {concat_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:range_op_eol, range_op_eol}, {:matched_expr, matched_expr}),
-    do: {range_op_eol, matched_expr}
+  defr matched_op_expr({:range_op_eol, range_op_eol}, {:matched_expr, matched_expr}) do
+    {range_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:ternary_op_eol, ternary_op_eol}, {:matched_expr, matched_expr}),
-    do: {ternary_op_eol, matched_expr}
+  defr matched_op_expr({:ternary_op_eol, ternary_op_eol}, {:matched_expr, matched_expr}) do
+    {ternary_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:xor_op_eol, xor_op_eol}, {:matched_expr, matched_expr}),
-    do: {xor_op_eol, matched_expr}
+  defr matched_op_expr({:xor_op_eol, xor_op_eol}, {:matched_expr, matched_expr}) do
+    {xor_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:and_op_eol, and_op_eol}, {:matched_expr, matched_expr}),
-    do: {and_op_eol, matched_expr}
+  defr matched_op_expr({:and_op_eol, and_op_eol}, {:matched_expr, matched_expr}) do
+    {and_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:or_op_eol, or_op_eol}, {:matched_expr, matched_expr}),
-    do: {or_op_eol, matched_expr}
+  defr matched_op_expr({:or_op_eol, or_op_eol}, {:matched_expr, matched_expr}) do
+    {or_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:in_op_eol, in_op_eol}, {:matched_expr, matched_expr}),
-    do: {in_op_eol, matched_expr}
+  defr matched_op_expr({:in_op_eol, in_op_eol}, {:matched_expr, matched_expr}) do
+    {in_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:in_match_op_eol, in_match_op_eol}, {:matched_expr, matched_expr}),
-    do: {in_match_op_eol, matched_expr}
+  defr matched_op_expr({:in_match_op_eol, in_match_op_eol}, {:matched_expr, matched_expr}) do
+    {in_match_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:type_op_eol, type_op_eol}, {:matched_expr, matched_expr}),
-    do: {type_op_eol, matched_expr}
+  defr matched_op_expr({:type_op_eol, type_op_eol}, {:matched_expr, matched_expr}) do
+    {type_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:when_op_eol, when_op_eol}, {:matched_expr, matched_expr}),
-    do: {when_op_eol, matched_expr}
+  defr matched_op_expr({:when_op_eol, when_op_eol}, {:matched_expr, matched_expr}) do
+    {when_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:pipe_op_eol, pipe_op_eol}, {:matched_expr, matched_expr}),
-    do: {pipe_op_eol, matched_expr}
+  defr matched_op_expr({:pipe_op_eol, pipe_op_eol}, {:matched_expr, matched_expr}) do
+    {pipe_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:comp_op_eol, comp_op_eol}, {:matched_expr, matched_expr}),
-    do: {comp_op_eol, matched_expr}
+  defr matched_op_expr({:comp_op_eol, comp_op_eol}, {:matched_expr, matched_expr}) do
+    {comp_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:rel_op_eol, rel_op_eol}, {:matched_expr, matched_expr}),
-    do: {rel_op_eol, matched_expr}
+  defr matched_op_expr({:rel_op_eol, rel_op_eol}, {:matched_expr, matched_expr}) do
+    {rel_op_eol, matched_expr}
+  end
 
-  defr matched_op_expr({:arrow_op_eol, arrow_op_eol}, {:matched_expr, matched_expr}),
-    do: {arrow_op_eol, matched_expr}
+  defr matched_op_expr({:arrow_op_eol, arrow_op_eol}, {:matched_expr, matched_expr}) do
+    {arrow_op_eol, matched_expr}
+  end
 
   defr matched_op_expr({:arrow_op_eol, arrow_op_eol}, {:no_parens_one_expr, no_parens_one_expr}) do
     warn_pipe(arrow_op_eol, no_parens_one_expr)
     {arrow_op_eol, no_parens_one_expr}
   end
 
-  defr unmatched_op_expr({:match_op_eol, match_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {match_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:match_op_eol, match_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {match_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:dual_op_eol, dual_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {dual_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:dual_op_eol, dual_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {dual_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:mult_op_eol, mult_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {mult_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:mult_op_eol, mult_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {mult_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:power_op_eol, power_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {power_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:power_op_eol, power_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {power_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:concat_op_eol, concat_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {concat_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:concat_op_eol, concat_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {concat_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:range_op_eol, range_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {range_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:range_op_eol, range_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {range_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:ternary_op_eol, ternary_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {ternary_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:ternary_op_eol, ternary_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {ternary_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:xor_op_eol, xor_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {xor_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:xor_op_eol, xor_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {xor_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:and_op_eol, and_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {and_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:and_op_eol, and_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {and_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:or_op_eol, or_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {or_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:or_op_eol, or_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {or_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:in_op_eol, in_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {in_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:in_op_eol, in_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {in_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:in_match_op_eol, in_match_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {in_match_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:in_match_op_eol, in_match_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {in_match_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:type_op_eol, type_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {type_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:type_op_eol, type_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {type_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:when_op_eol, when_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {when_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:when_op_eol, when_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {when_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:pipe_op_eol, pipe_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {pipe_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:pipe_op_eol, pipe_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {pipe_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:comp_op_eol, comp_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {comp_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:comp_op_eol, comp_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {comp_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:rel_op_eol, rel_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {rel_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:rel_op_eol, rel_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {rel_op_eol, unmatched_expr}
+  end
 
-  defr unmatched_op_expr({:arrow_op_eol, arrow_op_eol}, {:unmatched_expr, unmatched_expr}),
-    do: {arrow_op_eol, unmatched_expr}
+  defr unmatched_op_expr({:arrow_op_eol, arrow_op_eol}, {:unmatched_expr, unmatched_expr}) do
+    {arrow_op_eol, unmatched_expr}
+  end
 
-  defr no_parens_op_expr({:match_op_eol, match_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {match_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:match_op_eol, match_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {match_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:dual_op_eol, dual_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {dual_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:dual_op_eol, dual_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {dual_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:mult_op_eol, mult_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {mult_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:mult_op_eol, mult_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {mult_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:power_op_eol, power_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {power_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:power_op_eol, power_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {power_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:concat_op_eol, concat_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {concat_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:concat_op_eol, concat_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {concat_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:range_op_eol, range_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {range_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:range_op_eol, range_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {range_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:ternary_op_eol, ternary_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {ternary_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:ternary_op_eol, ternary_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {ternary_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:xor_op_eol, xor_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {xor_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:xor_op_eol, xor_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {xor_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:and_op_eol, and_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {and_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:and_op_eol, and_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {and_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:or_op_eol, or_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {or_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:or_op_eol, or_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {or_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:in_op_eol, in_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {in_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:in_op_eol, in_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {in_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:in_match_op_eol, in_match_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {in_match_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:in_match_op_eol, in_match_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {in_match_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:type_op_eol, type_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {type_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:type_op_eol, type_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {type_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:when_op_eol, when_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {when_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:when_op_eol, when_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {when_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:pipe_op_eol, pipe_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {pipe_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:pipe_op_eol, pipe_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {pipe_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:comp_op_eol, comp_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {comp_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:comp_op_eol, comp_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {comp_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:rel_op_eol, rel_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {rel_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:rel_op_eol, rel_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {rel_op_eol, no_parens_expr}
+  end
 
-  defr no_parens_op_expr({:arrow_op_eol, arrow_op_eol}, {:no_parens_expr, no_parens_expr}),
-    do: {arrow_op_eol, no_parens_expr}
+  defr no_parens_op_expr({:arrow_op_eol, arrow_op_eol}, {:no_parens_expr, no_parens_expr}) do
+    {arrow_op_eol, no_parens_expr}
+  end
 
   defr no_parens_op_expr(
          {:arrow_op_eol, arrow_op_eol},
@@ -578,98 +579,99 @@ defmodule ElixirParser do
     {arrow_op_eol, no_parens_many_expr}
   end
 
-  ## Allow when (and only when) with keywords
   defr no_parens_op_expr(
          {:when_op_eol, when_op_eol},
          {:call_args_no_parens_kw, call_args_no_parens_kw}
-       ),
-       do: {when_op_eol, call_args_no_parens_kw}
+       ) do
+    {when_op_eol, call_args_no_parens_kw}
+  end
 
   defr no_parens_one_ambig_expr(
          {:dot_op_identifier, dot_op_identifier},
          {:call_args_no_parens_ambig, call_args_no_parens_ambig}
-       ),
-       do: build_no_parens(dot_op_identifier, call_args_no_parens_ambig)
+       ) do
+    build_no_parens(dot_op_identifier, call_args_no_parens_ambig)
+  end
 
   defr no_parens_one_ambig_expr(
          {:dot_identifier, dot_identifier},
          {:call_args_no_parens_ambig, call_args_no_parens_ambig}
-       ),
-       do: build_no_parens(dot_identifier, call_args_no_parens_ambig)
+       ) do
+    build_no_parens(dot_identifier, call_args_no_parens_ambig)
+  end
 
   defr no_parens_many_expr(
          {:dot_op_identifier, dot_op_identifier},
          {:call_args_no_parens_many_strict, call_args_no_parens_many_strict}
-       ),
-       do: build_no_parens(dot_op_identifier, call_args_no_parens_many_strict)
+       ) do
+    build_no_parens(dot_op_identifier, call_args_no_parens_many_strict)
+  end
 
   defr no_parens_many_expr(
          {:dot_identifier, dot_identifier},
          {:call_args_no_parens_many_strict, call_args_no_parens_many_strict}
-       ),
-       do: build_no_parens(dot_identifier, call_args_no_parens_many_strict)
+       ) do
+    build_no_parens(dot_identifier, call_args_no_parens_many_strict)
+  end
 
   defr no_parens_one_expr(
          {:dot_op_identifier, dot_op_identifier},
          {:call_args_no_parens_one, call_args_no_parens_one}
-       ),
-       do: build_no_parens(dot_op_identifier, call_args_no_parens_one)
+       ) do
+    build_no_parens(dot_op_identifier, call_args_no_parens_one)
+  end
 
   defr no_parens_one_expr(
          {:dot_identifier, dot_identifier},
          {:call_args_no_parens_one, call_args_no_parens_one}
-       ),
-       do: build_no_parens(dot_identifier, call_args_no_parens_one)
+       ) do
+    build_no_parens(dot_identifier, call_args_no_parens_one)
+  end
 
-  defr no_parens_zero_expr({:dot_do_identifier, dot_do_identifier}),
-    do: build_no_parens(dot_do_identifier, nil)
+  defr no_parens_zero_expr({:dot_do_identifier, dot_do_identifier}) do
+    build_no_parens(dot_do_identifier, nil)
+  end
 
-  defr no_parens_zero_expr({:dot_identifier, dot_identifier}),
-    do: build_no_parens(dot_identifier, nil)
+  defr no_parens_zero_expr({:dot_identifier, dot_identifier}) do
+    build_no_parens(dot_identifier, nil)
+  end
 
-  ## From this point on, we just have constructs that can be
-  ## used with the access syntax. Note that (dot_)identifier
-  ## is not included in this list simply because the tokenizer
-  ## marks identifiers followed by brackets as bracket_identifier
   defr access_expr({:bracket_at_expr, bracket_at_expr}), do: bracket_at_expr
   defr access_expr({:bracket_expr, bracket_expr}), do: bracket_expr
 
-  defr access_expr({:capture_int, capture_int}, {:int, int}),
-    do: build_unary_op(capture_int, number_value(int))
+  defr access_expr({:capture_int, capture_int}, {:int, int}) do
+    build_unary_op(capture_int, number_value(int))
+  end
 
-  defr access_expr({:fn_eoe, fn_eoe}, {:stab, stab}, {:end_eoe, end_eoe}),
-    do: build_fn(fn_eoe, stab, end_eoe)
+  defr access_expr({:fn_eoe, fn_eoe}, {:stab, stab}, {:end_eoe, end_eoe}) do
+    build_fn(fn_eoe, stab, end_eoe)
+  end
 
-  defr access_expr({:open_paren, open_paren}, {:stab, stab}, {:close_paren, close_paren}),
-    do: build_paren_stab(open_paren, stab, close_paren)
+  defr access_expr({:open_paren, open_paren}, {:stab, stab}, {:close_paren, close_paren}) do
+    build_paren_stab(open_paren, stab, close_paren)
+  end
 
-  defr access_expr(
-         {:open_paren, open_paren},
-         {:stab, stab},
-         :pn_semicolon,
-         {:close_paren, close_paren}
-       ),
-       do: build_paren_stab(open_paren, stab, close_paren)
-
-  defr access_expr(
-         {:open_paren, open_paren},
-         :pn_semicolon,
-         {:stab, stab},
-         :pn_semicolon,
-         {:close_paren, close_paren}
-       ),
-       do: build_paren_stab(open_paren, stab, close_paren)
+  defr access_expr({:open_paren, open_paren}, {:stab, stab}, :";", {:close_paren, close_paren}) do
+    build_paren_stab(open_paren, stab, close_paren)
+  end
 
   defr access_expr(
          {:open_paren, open_paren},
-         :pn_semicolon,
+         :";",
          {:stab, stab},
+         :";",
          {:close_paren, close_paren}
-       ),
-       do: build_paren_stab(open_paren, stab, close_paren)
+       ) do
+    build_paren_stab(open_paren, stab, close_paren)
+  end
 
-  defr access_expr({:open_paren, open_paren}, :pn_semicolon, {:close_paren, close_paren}),
-    do: build_paren_stab(open_paren, [], close_paren)
+  defr access_expr({:open_paren, open_paren}, :";", {:stab, stab}, {:close_paren, close_paren}) do
+    build_paren_stab(open_paren, stab, close_paren)
+  end
+
+  defr access_expr({:open_paren, open_paren}, :";", {:close_paren, close_paren}) do
+    build_paren_stab(open_paren, [], close_paren)
+  end
 
   defr access_expr({:empty_paren, empty_paren}) do
     warn_empty_paren(empty_paren)
@@ -682,13 +684,14 @@ defmodule ElixirParser do
   defr access_expr({:list, list}), do: element(1, list)
   defr access_expr({:map, map}), do: map
   defr access_expr({:tuple, tuple}), do: tuple
-  defr access_expr({:ex_true, ex_true}), do: handle_literal(id(ex_true), ex_true)
-  defr access_expr({:ex_false, ex_false}), do: handle_literal(id(ex_false), ex_false)
-  defr access_expr({:ex_nil, ex_nil}), do: handle_literal(id(ex_nil), ex_nil)
+  defr access_expr({true, ex_true}), do: handle_literal(id(ex_true), ex_true)
+  defr access_expr({false, ex_false}), do: handle_literal(id(ex_false), ex_false)
+  defr access_expr({nil, ex_nil}), do: handle_literal(id(ex_nil), ex_nil)
   defr access_expr({:bin_string, bin_string}), do: build_bin_string(bin_string, delimiter(<<?">>))
 
-  defr access_expr({:list_string, list_string}),
-    do: build_list_string(list_string, delimiter(<<?'>>))
+  defr access_expr({:list_string, list_string}) do
+    build_list_string(list_string, delimiter(<<?'>>))
+  end
 
   defr access_expr({:bin_heredoc, bin_heredoc}), do: build_bin_heredoc(bin_heredoc)
   defr access_expr({:list_heredoc, list_heredoc}), do: build_list_heredoc(list_heredoc)
@@ -696,265 +699,441 @@ defmodule ElixirParser do
   defr access_expr({:sigil, sigil}), do: build_sigil(sigil)
   defr access_expr({:atom, atom}), do: handle_literal(exprs(atom), atom)
 
-  defr access_expr({:atom_quoted, atom_quoted}),
-    do: handle_literal(exprs(atom_quoted), atom_quoted, delimiter(<<?">>))
+  defr access_expr({:atom_quoted, atom_quoted}) do
+    handle_literal(exprs(atom_quoted), atom_quoted, delimiter(<<?">>))
+  end
 
-  defr access_expr({:atom_safe, atom_safe}),
-    do: build_quoted_atom(atom_safe, true, delimiter(<<?">>))
+  defr access_expr({:atom_safe, atom_safe}) do
+    build_quoted_atom(atom_safe, true, delimiter(<<?">>))
+  end
 
-  defr access_expr({:atom_unsafe, atom_unsafe}),
-    do: build_quoted_atom(atom_unsafe, false, delimiter(<<?">>))
+  defr access_expr({:atom_unsafe, atom_unsafe}) do
+    build_quoted_atom(atom_unsafe, false, delimiter(<<?">>))
+  end
 
   defr access_expr({:dot_alias, dot_alias}), do: dot_alias
   defr access_expr({:parens_call, parens_call}), do: parens_call
   defr access_expr({:range_op, range_op}), do: build_nullary_op(range_op)
 
-  #region start
+  defr parens_call(
+         {:dot_call_identifier, dot_call_identifier},
+         {:call_args_parens, call_args_parens}
+       ) do
+    build_parens(dot_call_identifier, call_args_parens, {[], []})
+  end
 
-  ## Also used by maps and structs
-  parens_call ~> dot_call_identifier call_args_parens do build_parens(@1, @2, {[], []}) end
-  parens_call ~> dot_call_identifier call_args_parens call_args_parens do build_nested_parens(@1, @2, @3, {[], []}) end
+  defr parens_call(
+         {:dot_call_identifier, dot_call_identifier},
+         {:call_args_parens, call_args_parens},
+         {:call_args_parens, call_args_parens}
+       ) do
+    build_nested_parens(dot_call_identifier, call_args_parens, call_args_parens, {[], []})
+  end
 
-  bracket_arg ~> open_bracket kw_data close_bracket do build_access_arg(@1, @2, @3) end
-  bracket_arg ~> open_bracket container_expr close_bracket do build_access_arg(@1, @2, @3) end
-  bracket_arg ~> open_bracket container_expr pn_comma close_bracket do build_access_arg(@1, @2, @4) end
-  bracket_arg ~> open_bracket container_expr pn_comma container_args close_bracket do error_too_many_access_syntax(@3) end
+  defr bracket_arg(
+         {:open_bracket, open_bracket},
+         {:kw_data, kw_data},
+         {:close_bracket, close_bracket}
+       ) do
+    build_access_arg(open_bracket, kw_data, close_bracket)
+  end
 
-  bracket_expr ~> dot_bracket_identifier bracket_arg do build_access(build_no_parens(@1, nil), @2) end
-  bracket_expr ~> access_expr bracket_arg do build_access(@1, meta_with_from_brackets(@2)) end
+  defr bracket_arg(
+         {:open_bracket, open_bracket},
+         {:container_expr, container_expr},
+         {:close_bracket, close_bracket}
+       ) do
+    build_access_arg(open_bracket, container_expr, close_bracket)
+  end
 
-  bracket_at_expr ~> at_op_eol dot_bracket_identifier bracket_arg do
-                       build_access(build_unary_op(@1, build_no_parens(@2, nil)), @3)
-                     end
-  bracket_at_expr ~> at_op_eol access_expr bracket_arg do
-                       build_access(build_unary_op(@1, @2), @3)
-                     end
+  defr bracket_arg(
+         {:open_bracket, open_bracket},
+         {:container_expr, container_expr},
+         :",",
+         {:close_bracket, close_bracket}
+       ) do
+    build_access_arg(open_bracket, container_expr, close_bracket)
+  end
 
-  ## Blocks
+  defr bracket_arg(
+         :open_bracket,
+         :container_expr,
+         {:",", pn_comma},
+         :container_args,
+         :close_bracket
+       ) do
+    error_too_many_access_syntax(pn_comma)
+  end
 
-  do_block ~> do_eoe ex_end do
-                {do_end_meta(@1, @2), [[{handle_literal(ex_do, @1), {:__block__, [], []}}]]}
-              end
-  do_block ~> do_eoe stab end_eoe do
-                {do_end_meta(@1, @3), [[{handle_literal(ex_do, @1), build_stab(@2)}]]}
-              end
-  do_block ~> do_eoe block_list ex_end do
-                {do_end_meta(@1, @3), [[{handle_literal(ex_do, @1), {:__block__, [], []}} | @2]]}
-              end
-  do_block ~> do_eoe stab_eoe block_list ex_end do
-                {do_end_meta(@1, @4), [[{handle_literal(ex_do, @1), build_stab(@2)} | @3]]}
-              end
-  eoe ~> eol do @1 end
-  eoe ~> pn_semicolon do @1 end
-  eoe ~> eol pn_semicolon do @1 end
+  defr bracket_expr(
+         {:dot_bracket_identifier, dot_bracket_identifier},
+         {:bracket_arg, bracket_arg}
+       ) do
+    build_access(build_no_parens(dot_bracket_identifier, nil), bracket_arg)
+  end
 
-  fn_eoe ~> ex_fn do @1 end
-  fn_eoe ~> ex_fn eoe do next_is_eol(@1, @2) end
+  defr bracket_expr({:access_expr, access_expr}, {:bracket_arg, bracket_arg}) do
+    build_access(access_expr, meta_with_from_brackets(bracket_arg))
+  end
 
-  do_eoe ~> ex_do do @1 end
-  do_eoe ~> ex_do eoe do @1 end
+  defr bracket_at_expr(
+         {:at_op_eol, at_op_eol},
+         {:dot_bracket_identifier, dot_bracket_identifier},
+         {:bracket_arg, bracket_arg}
+       ) do
+    build_access(
+      build_unary_op(at_op_eol, build_no_parens(dot_bracket_identifier, nil)),
+      bracket_arg
+    )
+  end
 
-  end_eoe ~> ex_end do @1 end
-  end_eoe ~> eoe ex_end do @2 end
+  defr bracket_at_expr(
+         {:at_op_eol, at_op_eol},
+         {:access_expr, access_expr},
+         {:bracket_arg, bracket_arg}
+       ) do
+    build_access(build_unary_op(at_op_eol, access_expr), bracket_arg)
+  end
 
-  block_eoe ~> block_identifier do @1 end
-  block_eoe ~> block_identifier eoe do @1 end
+  defr do_block({:do_eoe, do_eoe}, {:end, ex_end}) do
+    {do_end_meta(do_eoe, ex_end), [[{handle_literal(:do, do_eoe), {:__block__, [], []}}]]}
+  end
 
-  stab ~> stab_expr do [@1] end
-  stab ~> stab eoe stab_expr do [@3 | annotate_eoe(@2, @1)] end
+  defr do_block({:do_eoe, do_eoe}, {:stab, stab}, {:end_eoe, end_eoe}) do
+    {do_end_meta(do_eoe, end_eoe), [[{handle_literal(:do, do_eoe), build_stab(stab)}]]}
+  end
 
-  stab_eoe ~> stab do @1 end
-  stab_eoe ~> stab eoe do @1 end
+  defr do_block({:do_eoe, do_eoe}, {:block_list, block_list}, {:end, ex_end}) do
+    {do_end_meta(do_eoe, ex_end),
+     [[{handle_literal(:do, do_eoe), {:__block__, [], []}} | block_list]]}
+  end
 
-  stab_expr ~> expr do
-                 @1
-               end
-  stab_expr ~> stab_op_eol_and_expr do
-                 build_op([], @1)
-               end
-  stab_expr ~> empty_paren stab_op_eol_and_expr do
-                 build_op([], @2)
-               end
-  stab_expr ~> empty_paren when_op expr stab_op_eol_and_expr do
-                 build_op([{ex_when, meta_from_token(@2), [@3]}], @4)
-               end
-  stab_expr ~> call_args_no_parens_all stab_op_eol_and_expr do
-                 build_op(unwrap_when(unwrap_splice(@1)), @2)
-               end
-  stab_expr ~> stab_parens_many stab_op_eol_and_expr do
-                 build_op(unwrap_splice(@1), @2)
-               end
-  stab_expr ~> stab_parens_many when_op expr stab_op_eol_and_expr do
-                 build_op([{ex_when, meta_from_token(@2), unwrap_splice(@1) ++ [@3]}], @4)
-               end
+  defr do_block(
+         {:do_eoe, do_eoe},
+         {:stab_eoe, stab_eoe},
+         {:block_list, block_list},
+         {:end, ex_end}
+       ) do
+    {do_end_meta(do_eoe, ex_end),
+     [[{handle_literal(:do, do_eoe), build_stab(stab_eoe)} | block_list]]}
+  end
 
-  stab_op_eol_and_expr ~> stab_op_eol expr do {@1, @2} end
-  stab_op_eol_and_expr ~> stab_op_eol do
-                            warn_empty_stab_clause(@1)
-                            {@1, handle_literal(ex_nil, @1)}
-                          end
+  defr eoe({:eol, eol}), do: eol
+  defr eoe({:";", pn_semicolon}), do: pn_semicolon
+  defr eoe({:eol, eol}, :";"), do: eol
 
-  block_item ~> block_eoe stab_eoe do
-                  {handle_literal(exprs(@1), @1), build_stab(@2)}
-                end
-  block_item ~> block_eoe do
-                  {handle_literal(exprs(@1), @1), {:__block__, [], []}}
-                end
+  defr fn_eoe({:fn, ex_fn}), do: ex_fn
+  defr fn_eoe({:fn, ex_fn}, {:eoe, eoe}), do: next_is_eol(ex_fn, eoe)
 
-  block_list ~> block_item do [@1] end
-  block_list ~> block_item block_list do [@1 | @2] end
+  defr do_eoe({:do, ex_do}), do: ex_do
+  defr do_eoe({:do, ex_do}, :eoe), do: ex_do
 
-  ## Helpers
+  defr end_eoe({:end, ex_end}), do: ex_end
+  defr end_eoe(:eoe, {:end, ex_end}), do: ex_end
 
-  open_paren ~> pn_lparen      do @1 end
-  open_paren ~> pn_lparen eol  do next_is_eol(@1, @2) end
-  close_paren ~> pn_rparen     do @1 end
-  close_paren ~> eol pn_rparen do @2 end
+  defr block_eoe({:block_identifier, block_identifier}), do: block_identifier
+  defr block_eoe({:block_identifier, block_identifier}, :eoe), do: block_identifier
 
-  empty_paren ~> open_paren pn_rparen do @1 end
+  defr stab({:stab_expr, stab_expr}), do: [stab_expr]
 
-  open_bracket  ~> pn_lbracket     do @1 end
-  open_bracket  ~> pn_lbracket eol do next_is_eol(@1, @2) end
-  close_bracket ~> pn_rbracket     do @1 end
-  close_bracket ~> eol pn_rbracket do @2 end
+  defr stab({:stab, stab}, {:eoe, eoe}, {:stab_expr, stab_expr}) do
+    [stab_expr | annotate_eoe(eoe, stab)]
+  end
 
-  open_bit  ~> pn_lshift     do @1 end
-  open_bit  ~> pn_lshift eol do next_is_eol(@1, @2) end
-  close_bit ~> pn_rshift     do @1 end
-  close_bit ~> eol pn_rshift do @2 end
+  defr stab_eoe({:stab, stab}), do: stab
+  defr stab_eoe({:stab, stab}, :eoe), do: stab
 
-  open_curly  ~> pn_lbrace     do @1 end
-  open_curly  ~> pn_lbrace eol do next_is_eol(@1, @2) end
-  close_curly ~> pn_rbrace     do @1 end
-  close_curly ~> eol pn_rbrace do @2 end
+  defr stab_expr({:expr, expr}), do: expr
 
-  # Operators
+  defr stab_expr({:stab_op_eol_and_expr, stab_op_eol_and_expr}) do
+    build_op([], stab_op_eol_and_expr)
+  end
 
-  unary_op_eol ~> unary_op do @1 end
-  unary_op_eol ~> unary_op eol do @1 end
-  unary_op_eol ~> dual_op do @1 end
-  unary_op_eol ~> dual_op eol do @1 end
-  unary_op_eol ~> ternary_op do @1 end
-  unary_op_eol ~> ternary_op eol do @1 end
+  defr stab_expr(:empty_paren, {:stab_op_eol_and_expr, stab_op_eol_and_expr}) do
+    build_op([], stab_op_eol_and_expr)
+  end
 
-  capture_op_eol ~> capture_op do @1 end
-  capture_op_eol ~> capture_op eol do @1 end
+  defr stab_expr(
+         :empty_paren,
+         {:when_op, when_op},
+         {:expr, expr},
+         {:stab_op_eol_and_expr, stab_op_eol_and_expr}
+       ) do
+    build_op([{:when, meta_from_token(when_op), [expr]}], stab_op_eol_and_expr)
+  end
 
-  at_op_eol ~> at_op do @1 end
-  at_op_eol ~> at_op eol do @1 end
+  defr stab_expr(
+         {:call_args_no_parens_all, call_args_no_parens_all},
+         {:stab_op_eol_and_expr, stab_op_eol_and_expr}
+       ) do
+    build_op(unwrap_when(unwrap_splice(call_args_no_parens_all)), stab_op_eol_and_expr)
+  end
 
-  match_op_eol ~> match_op do @1 end
-  match_op_eol ~> match_op eol do next_is_eol(@1, @2) end
+  defr stab_expr(
+         {:stab_parens_many, stab_parens_many},
+         {:stab_op_eol_and_expr, stab_op_eol_and_expr}
+       ) do
+    build_op(unwrap_splice(stab_parens_many), stab_op_eol_and_expr)
+  end
 
-  dual_op_eol ~> dual_op do @1 end
-  dual_op_eol ~> dual_op eol do next_is_eol(@1, @2) end
+  defr stab_expr(
+         {:stab_parens_many, stab_parens_many},
+         {:when_op, when_op},
+         {:expr, expr},
+         {:stab_op_eol_and_expr, stab_op_eol_and_expr}
+       ) do
+    build_op(
+      [{:when, meta_from_token(when_op), unwrap_splice(stab_parens_many) ++ [expr]}],
+      stab_op_eol_and_expr
+    )
+  end
 
-  mult_op_eol ~> mult_op do @1 end
-  mult_op_eol ~> mult_op eol do next_is_eol(@1, @2) end
+  defr stab_op_eol_and_expr({:stab_op_eol, stab_op_eol}, {:expr, expr}), do: {stab_op_eol, expr}
 
-  power_op_eol ~> power_op do @1 end
-  power_op_eol ~> power_op eol do next_is_eol(@1, @2) end
+  defr stab_op_eol_and_expr({:stab_op_eol, stab_op_eol}) do
+    warn_empty_stab_clause(stab_op_eol)
+    {stab_op_eol, handle_literal(nil, stab_op_eol)}
+  end
 
-  concat_op_eol ~> concat_op do @1 end
-  concat_op_eol ~> concat_op eol do next_is_eol(@1, @2) end
+  defr block_item({:block_eoe, block_eoe}, {:stab_eoe, stab_eoe}) do
+    {handle_literal(exprs(block_eoe), block_eoe), build_stab(stab_eoe)}
+  end
 
-  range_op_eol ~> range_op do @1 end
-  range_op_eol ~> range_op eol do next_is_eol(@1, @2) end
+  defr block_item({:block_eoe, block_eoe}) do
+    {handle_literal(exprs(block_eoe), block_eoe), {:__block__, [], []}}
+  end
 
-  ternary_op_eol ~> ternary_op do @1 end
-  ternary_op_eol ~> ternary_op eol do next_is_eol(@1, @2) end
+  defr block_list({:block_item, block_item}), do: [block_item]
 
-  xor_op_eol ~> xor_op do @1 end
-  xor_op_eol ~> xor_op eol do next_is_eol(@1, @2) end
+  defr block_list({:block_item, block_item}, {:block_list, block_list}) do
+    [block_item | block_list]
+  end
 
-  pipe_op_eol ~> pipe_op do @1 end
-  pipe_op_eol ~> pipe_op eol do next_is_eol(@1, @2) end
+  defr open_paren({:"(", pn_left_paren}), do: pn_left_paren
+  defr open_paren({:"(", pn_left_paren}, {:eol, eol}), do: next_is_eol(pn_left_paren, eol)
 
-  and_op_eol ~> and_op do @1 end
-  and_op_eol ~> and_op eol do next_is_eol(@1, @2) end
+  defr close_paren({:")", pn_right_paren}), do: pn_right_paren
+  defr close_paren(:eol, {:")", pn_right_paren}), do: pn_right_paren
 
-  or_op_eol ~> or_op do @1 end
-  or_op_eol ~> or_op eol do next_is_eol(@1, @2) end
+  defr empty_paren({:open_paren, open_paren}, :")"), do: open_paren
 
-  in_op_eol ~> in_op do @1 end
-  in_op_eol ~> in_op eol do next_is_eol(@1, @2) end
+  defr open_bracket({:"[", pn_left_bracket}), do: pn_left_bracket
+  defr open_bracket({:"[", pn_left_bracket}, {:eol, eol}), do: next_is_eol(pn_left_bracket, eol)
 
-  in_match_op_eol ~> in_match_op do @1 end
-  in_match_op_eol ~> in_match_op eol do next_is_eol(@1, @2) end
+  defr close_bracket({:"]", pn_right_bracket}), do: pn_right_bracket
+  defr close_bracket(:eol, {:"]", pn_right_bracket}), do: pn_right_bracket
 
-  type_op_eol ~> type_op do @1 end
-  type_op_eol ~> type_op eol do next_is_eol(@1, @2) end
+  defr open_bit({:"<<", pn_left_shift}), do: pn_left_shift
+  defr open_bit({:"<<", pn_left_shift}, {:eol, eol}), do: next_is_eol(pn_left_shift, eol)
 
-  when_op_eol ~> when_op do @1 end
-  when_op_eol ~> when_op eol do next_is_eol(@1, @2) end
+  defr close_bit({:">>", pn_right_shift}), do: pn_right_shift
+  defr close_bit(:eol, {:">>", pn_right_shift}), do: pn_right_shift
 
-  stab_op_eol ~> stab_op do @1 end
-  stab_op_eol ~> stab_op eol do next_is_eol(@1, @2) end
+  defr open_curly({:"{", pn_left_brace}), do: pn_left_brace
+  defr open_curly({:"{", pn_left_brace}, {:eol, eol}), do: next_is_eol(pn_left_brace, eol)
 
-  comp_op_eol ~> comp_op do @1 end
-  comp_op_eol ~> comp_op eol do next_is_eol(@1, @2) end
+  defr close_curly({:"}", pn_right_brace}), do: pn_right_brace
+  defr close_curly(:eol, {:"}", pn_right_brace}), do: pn_right_brace
 
-  rel_op_eol ~> rel_op do @1 end
-  rel_op_eol ~> rel_op eol do next_is_eol(@1, @2) end
+  defr unary_op_eol({:unary_op, unary_op}), do: unary_op
+  defr unary_op_eol({:unary_op, unary_op}, :eol), do: unary_op
+  defr unary_op_eol({:dual_op, dual_op}), do: dual_op
+  defr unary_op_eol({:dual_op, dual_op}, :eol), do: dual_op
+  defr unary_op_eol({:ternary_op, ternary_op}), do: ternary_op
+  defr unary_op_eol({:ternary_op, ternary_op}, :eol), do: ternary_op
 
-  arrow_op_eol ~> arrow_op do @1 end
-  arrow_op_eol ~> arrow_op eol do next_is_eol(@1, @2) end
+  defr capture_op_eol({:capture_op, capture_op}), do: capture_op
+  defr capture_op_eol({:capture_op, capture_op}, :eol), do: capture_op
 
-  # Dot operator
+  defr at_op_eol({:at_op, at_op}), do: at_op
+  defr at_op_eol({:at_op, at_op}, :eol), do: at_op
 
-  dot_op ~> pn_dot do @1 end
-  dot_op ~> pn_dot eol do @1 end
+  defr match_op_eol({:match_op, match_op}), do: match_op
+  defr match_op_eol({:match_op, match_op}, {:eol, eol}), do: next_is_eol(match_op, eol)
 
-  dot_identifier ~> identifier do @1 end
-  dot_identifier ~> matched_expr dot_op identifier do build_dot(@2, @1, @3) end
+  defr dual_op_eol({:dual_op, dual_op}), do: dual_op
+  defr dual_op_eol({:dual_op, dual_op}, {:eol, eol}), do: next_is_eol(dual_op, eol)
 
-  dot_alias ~> alias do build_alias(@1) end
-  dot_alias ~> matched_expr dot_op alias do build_dot_alias(@2, @1, @3) end
-  dot_alias ~> matched_expr dot_op open_curly pn_rbrace do build_dot_container(@2, @1, [], []) end
-  dot_alias ~> matched_expr dot_op open_curly container_args close_curly do build_dot_container(@2, @1, @4, newlines_pair(@3, @5)) end
+  defr mult_op_eol({:mult_op, mult_op}), do: mult_op
+  defr mult_op_eol({:mult_op, mult_op}, {:eol, eol}), do: next_is_eol(mult_op, eol)
 
-  dot_op_identifier ~> op_identifier do @1 end
-  dot_op_identifier ~> matched_expr dot_op op_identifier do build_dot(@2, @1, @3) end
+  defr power_op_eol({:power_op, power_op}), do: power_op
+  defr power_op_eol({:power_op, power_op}, {:eol, eol}), do: next_is_eol(power_op, eol)
 
-  dot_do_identifier ~> do_identifier do @1 end
-  dot_do_identifier ~> matched_expr dot_op do_identifier do build_dot(@2, @1, @3) end
+  defr concat_op_eol({:concat_op, concat_op}), do: concat_op
+  defr concat_op_eol({:concat_op, concat_op}, {:eol, eol}), do: next_is_eol(concat_op, eol)
 
-  dot_bracket_identifier ~> bracket_identifier do @1 end
-  dot_bracket_identifier ~> matched_expr dot_op bracket_identifier do build_dot(@2, @1, @3) end
+  defr range_op_eol({:range_op, range_op}), do: range_op
+  defr range_op_eol({:range_op, range_op}, {:eol, eol}), do: next_is_eol(range_op, eol)
 
-  dot_paren_identifier ~> paren_identifier do @1 end
-  dot_paren_identifier ~> matched_expr dot_op paren_identifier do build_dot(@2, @1, @3) end
+  defr ternary_op_eol({:ternary_op, ternary_op}), do: ternary_op
+  defr ternary_op_eol({:ternary_op, ternary_op}, {:eol, eol}), do: next_is_eol(ternary_op, eol)
 
-  dot_call_identifier ~> dot_paren_identifier do @1 end
-  dot_call_identifier ~> matched_expr dot_call_op do {pn_dot, meta_from_token(@2), [@1]} end # Fun/local calls
+  defr xor_op_eol({:xor_op, xor_op}), do: xor_op
+  defr xor_op_eol({:xor_op, xor_op}, {:eol, eol}), do: next_is_eol(xor_op, eol)
 
-  # Function calls with no parentheses
+  defr pipe_op_eol({:pipe_op, pipe_op}), do: pipe_op
+  defr pipe_op_eol({:pipe_op, pipe_op}, {:eol, eol}), do: next_is_eol(pipe_op, eol)
 
-  call_args_no_parens_expr ~> matched_expr do @1 end
-  call_args_no_parens_expr ~> no_parens_expr do error_no_parens_many_strict(@1) end
+  defr and_op_eol({:and_op, and_op}), do: and_op
+  defr and_op_eol({:and_op, and_op}, {:eol, eol}), do: next_is_eol(and_op, eol)
 
-  call_args_no_parens_comma_expr ~> matched_expr pn_comma call_args_no_parens_expr do [@3, @1] end
-  call_args_no_parens_comma_expr ~> call_args_no_parens_comma_expr pn_comma call_args_no_parens_expr do [@3 | @1] end
+  defr or_op_eol({:or_op, or_op}), do: or_op
+  defr or_op_eol({:or_op, or_op}, {:eol, eol}), do: next_is_eol(or_op, eol)
 
-  call_args_no_parens_all ~> call_args_no_parens_one do @1 end
-  call_args_no_parens_all ~> call_args_no_parens_ambig do @1 end
-  call_args_no_parens_all ~> call_args_no_parens_many do @1 end
+  defr in_op_eol({:in_op, in_op}), do: in_op
+  defr in_op_eol({:in_op, in_op}, {:eol, eol}), do: next_is_eol(in_op, eol)
 
-  #endregion
+  defr in_match_op_eol({:in_match_op, in_match_op}), do: in_match_op
 
-  defr call_args_no_parens_one({:call_args_no_parens_kw, call_args_no_parens_kw}),
-    do: [call_args_no_parens_kw]
+  defr in_match_op_eol({:in_match_op, in_match_op}, {:eol, eol}),
+    do: next_is_eol(in_match_op, eol)
+
+  defr type_op_eol({:type_op, type_op}), do: type_op
+  defr type_op_eol({:type_op, type_op}, {:eol, eol}), do: next_is_eol(type_op, eol)
+
+  defr when_op_eol({:when_op, when_op}), do: when_op
+  defr when_op_eol({:when_op, when_op}, {:eol, eol}), do: next_is_eol(when_op, eol)
+
+  defr stab_op_eol({:stab_op, stab_op}), do: stab_op
+  defr stab_op_eol({:stab_op, stab_op}, {:eol, eol}), do: next_is_eol(stab_op, eol)
+
+  defr comp_op_eol({:comp_op, comp_op}), do: comp_op
+  defr comp_op_eol({:comp_op, comp_op}, {:eol, eol}), do: next_is_eol(comp_op, eol)
+
+  defr rel_op_eol({:rel_op, rel_op}), do: rel_op
+  defr rel_op_eol({:rel_op, rel_op}, {:eol, eol}), do: next_is_eol(rel_op, eol)
+
+  defr arrow_op_eol({:arrow_op, arrow_op}), do: arrow_op
+  defr arrow_op_eol({:arrow_op, arrow_op}, {:eol, eol}), do: next_is_eol(arrow_op, eol)
+
+  defr dot_op({:., pn_dot}), do: pn_dot
+  defr dot_op({:., pn_dot}, :eol), do: pn_dot
+
+  defr dot_identifier({:identifier, identifier}), do: identifier
+
+  defr dot_identifier({:matched_expr, matched_expr}, {:dot_op, dot_op}, {:identifier, identifier}) do
+    build_dot(dot_op, matched_expr, identifier)
+  end
+
+  defr dot_alias({:alias, alias}), do: build_alias(alias)
+
+  defr dot_alias({:matched_expr, matched_expr}, {:dot_op, dot_op}, {:alias, alias}) do
+    build_dot_alias(dot_op, matched_expr, alias)
+  end
+
+  defr dot_alias({:matched_expr, matched_expr}, {:dot_op, dot_op}, :open_curly, :"}") do
+    build_dot_container(dot_op, matched_expr, [], [])
+  end
+
+  defr dot_alias(
+         {:matched_expr, matched_expr},
+         {:dot_op, dot_op},
+         {:open_curly, open_curly},
+         {:container_args, container_args},
+         {:close_curly, close_curly}
+       ) do
+    build_dot_container(
+      dot_op,
+      matched_expr,
+      container_args,
+      newlines_pair(open_curly, close_curly)
+    )
+  end
+
+  defr dot_op_identifier({:op_identifier, op_identifier}), do: op_identifier
+
+  defr dot_op_identifier(
+         {:matched_expr, matched_expr},
+         {:dot_op, dot_op},
+         {:op_identifier, op_identifier}
+       ) do
+    build_dot(dot_op, matched_expr, op_identifier)
+  end
+
+  defr dot_do_identifier({:do_identifier, do_identifier}), do: do_identifier
+
+  defr dot_do_identifier(
+         {:matched_expr, matched_expr},
+         {:dot_op, dot_op},
+         {:do_identifier, do_identifier}
+       ) do
+    build_dot(dot_op, matched_expr, do_identifier)
+  end
+
+  defr dot_bracket_identifier({:bracket_identifier, bracket_identifier}), do: bracket_identifier
+
+  defr dot_bracket_identifier(
+         {:matched_expr, matched_expr},
+         {:dot_op, dot_op},
+         {:bracket_identifier, bracket_identifier}
+       ) do
+    build_dot(dot_op, matched_expr, bracket_identifier)
+  end
+
+  defr dot_paren_identifier({:paren_identifier, paren_identifier}), do: paren_identifier
+
+  defr dot_paren_identifier(
+         {:matched_expr, matched_expr},
+         {:dot_op, dot_op},
+         {:paren_identifier, paren_identifier}
+       ) do
+    build_dot(dot_op, matched_expr, paren_identifier)
+  end
+
+  defr dot_call_identifier({:dot_paren_identifier, dot_paren_identifier}) do
+    dot_paren_identifier
+  end
+
+  defr dot_call_identifier({:matched_expr, matched_expr}, {:dot_call_op, dot_call_op}) do
+    {:., meta_from_token(dot_call_op), [matched_expr]}
+  end
+
+  defr call_args_no_parens_expr({:matched_expr, matched_expr}), do: matched_expr
+
+  defr call_args_no_parens_expr({:no_parens_expr, no_parens_expr}) do
+    error_no_parens_many_strict(no_parens_expr)
+  end
+
+  defr call_args_no_parens_comma_expr(
+         {:matched_expr, matched_expr},
+         :",",
+         {:call_args_no_parens_expr, call_args_no_parens_expr}
+       ) do
+    [call_args_no_parens_expr, matched_expr]
+  end
+
+  defr call_args_no_parens_comma_expr(
+         {:call_args_no_parens_comma_expr, call_args_no_parens_comma_expr},
+         :",",
+         {:call_args_no_parens_expr, call_args_no_parens_expr}
+       ) do
+    [call_args_no_parens_expr | call_args_no_parens_comma_expr]
+  end
+
+  defr call_args_no_parens_all({:call_args_no_parens_one, call_args_no_parens_one}) do
+    call_args_no_parens_one
+  end
+
+  defr call_args_no_parens_all({:call_args_no_parens_ambig, call_args_no_parens_ambig}) do
+    call_args_no_parens_ambig
+  end
+
+  defr call_args_no_parens_all({:call_args_no_parens_many, call_args_no_parens_many}) do
+    call_args_no_parens_many
+  end
+
+  defr call_args_no_parens_one({:call_args_no_parens_kw, call_args_no_parens_kw}) do
+    [call_args_no_parens_kw]
+  end
 
   defr call_args_no_parens_one({:matched_expr, matched_expr}), do: [matched_expr]
 
-  ## This is the only no parens ambiguity where we don't
-  ## raise nor warn: "parent_call nested_call 1, 2, 3"
-  ## always assumes that all arguments are nested
   defr call_args_no_parens_ambig({:no_parens_expr, no_parens_expr}), do: [no_parens_expr]
 
   defr call_args_no_parens_many(
          {:matched_expr, matched_expr},
-         :pn_comma,
+         :",",
          {:call_args_no_parens_kw, call_args_no_parens_kw}
        ) do
     [matched_expr, call_args_no_parens_kw]
@@ -966,7 +1145,7 @@ defmodule ElixirParser do
 
   defr call_args_no_parens_many(
          {:call_args_no_parens_comma_expr, call_args_no_parens_comma_expr},
-         :pn_comma,
+         :",",
          {:call_args_no_parens_kw, call_args_no_parens_kw}
        ) do
     reverse([call_args_no_parens_kw | call_args_no_parens_comma_expr])
@@ -1008,8 +1187,6 @@ defmodule ElixirParser do
     call_args_no_parens_many
   end
 
-  # Containers
-
   defr container_expr({:matched_expr, matched_expr}), do: matched_expr
   defr container_expr({:unmatched_expr, unmatched_expr}), do: unmatched_expr
 
@@ -1021,7 +1198,7 @@ defmodule ElixirParser do
 
   defr container_args_base(
          {:container_args_base, container_args_base},
-         :pn_comma,
+         :",",
          {:container_expr, container_expr}
        ) do
     [container_expr | container_args_base]
@@ -1031,15 +1208,13 @@ defmodule ElixirParser do
     reverse(container_args_base)
   end
 
-  defr container_args({:container_args_base, container_args_base}, :pn_comma) do
+  defr container_args({:container_args_base, container_args_base}, :",") do
     reverse(container_args_base)
   end
 
-  defr container_args({:container_args_base, container_args_base}, :pn_comma, {:kw_data, kw_data}) do
+  defr container_args({:container_args_base, container_args_base}, :",", {:kw_data, kw_data}) do
     reverse([kw_data | container_args_base])
   end
-
-  # Function calls with parentheses
 
   defr call_args_parens_expr({:matched_expr, matched_expr}), do: matched_expr
   defr call_args_parens_expr({:unmatched_expr, unmatched_expr}), do: unmatched_expr
@@ -1054,14 +1229,14 @@ defmodule ElixirParser do
 
   defr call_args_parens_base(
          {:call_args_parens_base, call_args_parens_base},
-         :pn_comma,
+         :",",
          {:call_args_parens_expr, call_args_parens_expr}
        ) do
     [call_args_parens_expr | call_args_parens_base]
   end
 
-  defr call_args_parens({:open_paren, open_paren}, {:pn_rparen, pn_rparen}) do
-    {newlines_pair(open_paren, pn_rparen), []}
+  defr call_args_parens({:open_paren, open_paren}, {:")", pn_right_paren}) do
+    {newlines_pair(open_paren, pn_right_paren), []}
   end
 
   defr call_args_parens(
@@ -1091,66 +1266,60 @@ defmodule ElixirParser do
   defr call_args_parens(
          {:open_paren, open_paren},
          {:call_args_parens_base, call_args_parens_base},
-         :pn_comma,
+         :",",
          {:kw_call, kw_call},
          {:close_paren, close_paren}
        ) do
     {newlines_pair(open_paren, close_paren), reverse([kw_call | call_args_parens_base])}
   end
 
-  # KV
-
   defr kw_eol({:kw_identifier, kw_identifier}) do
-    handle_literal(exprs(kw_identifier), kw_identifier, [{:format, :keyword}])
+    handle_literal(exprs(kw_identifier), kw_identifier, [{format, keyword}])
   end
 
   defr kw_eol({:kw_identifier, kw_identifier}, :eol) do
-    handle_literal(exprs(kw_identifier), kw_identifier, [{:format, :keyword}])
+    handle_literal(exprs(kw_identifier), kw_identifier, [{format, keyword}])
   end
 
   defr kw_eol({:kw_identifier_safe, kw_identifier_safe}) do
-    build_quoted_atom(kw_identifier_safe, true, [{:format, :keyword}])
+    build_quoted_atom(kw_identifier_safe, true, [{format, keyword}])
   end
 
   defr kw_eol({:kw_identifier_safe, kw_identifier_safe}, :eol) do
-    build_quoted_atom(kw_identifier_safe, true, [{:format, :keyword}])
+    build_quoted_atom(kw_identifier_safe, true, [{format, keyword}])
   end
 
   defr kw_eol({:kw_identifier_unsafe, kw_identifier_unsafe}) do
-    build_quoted_atom(kw_identifier_unsafe, false, [{:format, :keyword}])
+    build_quoted_atom(kw_identifier_unsafe, false, [{format, keyword}])
   end
 
   defr kw_eol({:kw_identifier_unsafe, kw_identifier_unsafe}, :eol) do
-    build_quoted_atom(kw_identifier_unsafe, false, [{:format, :keyword}])
+    build_quoted_atom(kw_identifier_unsafe, false, [{format, keyword}])
   end
 
-  defr kw_base({:kw_eol, kw_eol}, {:container_expr, container_expr}),
-    do: [{kw_eol, container_expr}]
+  defr kw_base({:kw_eol, kw_eol}, {:container_expr, container_expr}) do
+    [{kw_eol, container_expr}]
+  end
 
-  defr kw_base(
-         {:kw_base, kw_base},
-         :pn_comma,
-         {:kw_eol, kw_eol},
-         {:container_expr, container_expr}
-       ) do
+  defr kw_base({:kw_base, kw_base}, :",", {:kw_eol, kw_eol}, {:container_expr, container_expr}) do
     [{kw_eol, container_expr} | kw_base]
   end
 
   defr kw_call({:kw_base, kw_base}), do: reverse(kw_base)
 
-  defr kw_call({:kw_base, kw_base}, {:pn_comma, pn_comma}) do
+  defr kw_call({:kw_base, kw_base}, {:",", pn_comma}) do
     warn_trailing_comma(pn_comma)
     reverse(kw_base)
   end
 
-  defr kw_call(kw_base(pn_comma(matched_expr))) do
-    maybe_bad_keyword_call_follow_up(@2, @1, @3)
+  defr kw_call({:kw_base, kw_base}, {:",", pn_comma}, {:matched_expr, matched_expr}) do
+    maybe_bad_keyword_call_follow_up(pn_comma, kw_base, matched_expr)
   end
 
   defr kw_data({:kw_base, kw_base}), do: reverse(kw_base)
-  defr kw_data({:kw_base, kw_base}, :pn_comma), do: reverse(kw_base)
+  defr kw_data({:kw_base, kw_base}, :","), do: reverse(kw_base)
 
-  defr kw_data({:kw_base, kw_base}, {:pn_comma, pn_comma}, {:matched_expr, matched_expr}) do
+  defr kw_data({:kw_base, kw_base}, {:",", pn_comma}, {:matched_expr, matched_expr}) do
     maybe_bad_keyword_data_follow_up(pn_comma, kw_base, matched_expr)
   end
 
@@ -1169,7 +1338,7 @@ defmodule ElixirParser do
 
   defr call_args_no_parens_kw(
          {:call_args_no_parens_kw_expr, call_args_no_parens_kw_expr},
-         :pn_comma,
+         :",",
          {:call_args_no_parens_kw, call_args_no_parens_kw}
        ) do
     [call_args_no_parens_kw_expr | call_args_no_parens_kw]
@@ -1177,27 +1346,25 @@ defmodule ElixirParser do
 
   defr call_args_no_parens_kw(
          {:call_args_no_parens_kw_expr, call_args_no_parens_kw_expr},
-         {:pn_comma, pn_comma},
+         {:",", pn_comma},
          {:matched_expr, matched_expr}
        ) do
     maybe_bad_keyword_call_follow_up(pn_comma, [call_args_no_parens_kw_expr], matched_expr)
   end
 
-  # Lists
-
   defr list_args({:kw_data, kw_data}), do: kw_data
   defr list_args({:container_args_base, container_args_base}), do: reverse(container_args_base)
 
-  defr list_args({:container_args_base, container_args_base}, :pn_comma) do
+  defr list_args({:container_args_base, container_args_base}, :",") do
     reverse(container_args_base)
   end
 
-  defr list_args({:container_args_base, container_args_base}, :pn_comma, {:kw_data, kw_data}) do
+  defr list_args({:container_args_base, container_args_base}, :",", {:kw_data, kw_data}) do
     reverse(container_args_base, kw_data)
   end
 
-  defr list({:open_bracket, open_bracket}, {:pn_rbracket, pn_rbracket}) do
-    build_list(open_bracket, [], pn_rbracket)
+  defr list({:open_bracket, open_bracket}, {:"]", pn_right_bracket}) do
+    build_list(open_bracket, [], pn_right_bracket)
   end
 
   defr list(
@@ -1208,13 +1375,11 @@ defmodule ElixirParser do
     build_list(open_bracket, list_args, close_bracket)
   end
 
-  # Tuple
-
-  defr tuple({:open_curly, open_curly}, {:pn_rbrace, pn_rbrace}) do
-    build_tuple(open_curly, [], pn_rbrace)
+  defr tuple({:open_curly, open_curly}, {:"}", pn_right_brace}) do
+    build_tuple(open_curly, [], pn_right_brace)
   end
 
-  defr tuple({:open_curly, open_curly}, :kw_data, :pn_rbrace), do: bad_keyword(open_curly, :tuple)
+  defr tuple({:open_curly, open_curly}, :kw_data, :"}"), do: bad_keyword(open_curly, tuple)
 
   defr tuple(
          {:open_curly, open_curly},
@@ -1224,15 +1389,11 @@ defmodule ElixirParser do
     build_tuple(open_curly, container_args, close_curly)
   end
 
-  # Bitstrings
-
-  defr bitstring({:open_bit, open_bit}, {:pn_rshift, pn_rshift}) do
-    build_bit(open_bit, [], pn_rshift)
+  defr bitstring({:open_bit, open_bit}, {:">>", pn_right_shift}) do
+    build_bit(open_bit, [], pn_right_shift)
   end
 
-  defr bitstring({:open_bit, open_bit}, :kw_data, :pn_rshift) do
-    bad_keyword(open_bit, :bitstring)
-  end
+  defr bitstring({:open_bit, open_bit}, :kw_data, :">>"), do: bad_keyword(open_bit, bitstring)
 
   defr bitstring(
          {:open_bit, open_bit},
@@ -1241,8 +1402,6 @@ defmodule ElixirParser do
        ) do
     build_bit(open_bit, container_args, close_bit)
   end
-
-  # Map and structs
 
   defr assoc_op_eol({:assoc_op, assoc_op}), do: assoc_op
   defr assoc_op_eol({:assoc_op, assoc_op}, :eol), do: assoc_op
@@ -1259,19 +1418,11 @@ defmodule ElixirParser do
     {unmatched_expr, unmatched_expr}
   end
 
-  defr assoc_expr(
-         {:matched_expr, matched_expr},
-         :assoc_op_eol,
-         {:unmatched_expr, unmatched_expr}
-       ) do
+  defr assoc_expr({:matched_expr, matched_expr}, :assoc_op_eol, {:unmatched_expr, unmatched_expr}) do
     {matched_expr, unmatched_expr}
   end
 
-  defr assoc_expr(
-         {:unmatched_expr, unmatched_expr},
-         :assoc_op_eol,
-         {:matched_expr, matched_expr}
-       ) do
+  defr assoc_expr({:unmatched_expr, unmatched_expr}, :assoc_op_eol, {:matched_expr, matched_expr}) do
     {unmatched_expr, matched_expr}
   end
 
@@ -1313,30 +1464,30 @@ defmodule ElixirParser do
 
   defr assoc_base({:assoc_expr, assoc_expr}), do: [assoc_expr]
 
-  defr assoc_base({:assoc_base, assoc_base}, :pn_comma, {:assoc_expr, assoc_expr}) do
+  defr assoc_base({:assoc_base, assoc_base}, :",", {:assoc_expr, assoc_expr}) do
     [assoc_expr | assoc_base]
   end
 
   defr assoc({:assoc_base, assoc_base}), do: reverse(assoc_base)
-  defr assoc({:assoc_base, assoc_base}, :pn_comma), do: reverse(assoc_base)
+  defr assoc({:assoc_base, assoc_base}, :","), do: reverse(assoc_base)
 
-  defr map_op({:pn_map, pn_map}), do: pn_map
-  defr map_op({:pn_map, pn_map}, :eol), do: pn_map
+  defr map_op({:%{}, pn_map}), do: pn_map
+  defr map_op({:%{}, pn_map}, :eol), do: pn_map
 
   defr map_close({:kw_data, kw_data}, {:close_curly, close_curly}), do: {kw_data, close_curly}
   defr map_close({:assoc, assoc}, {:close_curly, close_curly}), do: {assoc, close_curly}
 
   defr map_close(
          {:assoc_base, assoc_base},
-         :pn_comma,
+         :",",
          {:kw_data, kw_data},
          {:close_curly, close_curly}
        ) do
     {reverse(assoc_base, kw_data), close_curly}
   end
 
-  defr map_args({:open_curly, open_curly}, {:pn_rbrace, pn_rbrace}) do
-    build_map(open_curly, [], pn_rbrace)
+  defr map_args({:open_curly, open_curly}, {:"}", pn_right_brace}) do
+    build_map(open_curly, [], pn_right_brace)
   end
 
   defr map_args({:open_curly, open_curly}, {:map_close, map_close}) do
@@ -1354,7 +1505,7 @@ defmodule ElixirParser do
   defr map_args(
          {:open_curly, open_curly},
          {:assoc_update, assoc_update},
-         :pn_comma,
+         :",",
          {:close_curly, close_curly}
        ) do
     build_map_update(open_curly, assoc_update, close_curly, [])
@@ -1363,7 +1514,7 @@ defmodule ElixirParser do
   defr map_args(
          {:open_curly, open_curly},
          {:assoc_update, assoc_update},
-         :pn_comma,
+         :",",
          {:map_close, map_close}
        ) do
     build_map_update(open_curly, assoc_update, element(2, map_close), element(1, map_close))
@@ -1377,7 +1528,8 @@ defmodule ElixirParser do
     build_map_update(open_curly, assoc_update_kw, close_curly, [])
   end
 
-  defr struct_op({:pn_percent, pn_percent}), do: pn_percent
+  defr struct_op({:%, pn_struct}), do: pn_struct
+
   defr struct_expr({:atom, atom}), do: handle_literal(exprs(atom), atom, [])
 
   defr struct_expr({:atom_quoted, atom_quoted}) do
@@ -1400,11 +1552,11 @@ defmodule ElixirParser do
   defr map(:map_op, {:map_args, map_args}), do: map_args
 
   defr map({:struct_op, struct_op}, {:struct_expr, struct_expr}, {:map_args, map_args}) do
-    {:pn_percent, meta_from_token(struct_op), [struct_expr, map_args]}
+    {:%, meta_from_token(struct_op), [struct_expr, map_args]}
   end
 
   defr map({:struct_op, struct_op}, {:struct_expr, struct_expr}, :eol, {:map_args, map_args}) do
-    {:pn_percent, meta_from_token(struct_op), [struct_expr, map_args]}
+    {:%, meta_from_token(struct_op), [struct_expr, map_args]}
   end
 
   defmacrop columns do
