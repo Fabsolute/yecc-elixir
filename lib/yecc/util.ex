@@ -45,7 +45,7 @@ defmodule Yecc.Util do
     root = Module.get_attribute(module, :root)
     symbol_empty = Module.get_attribute(module, :symbol_empty)
     symbol_end = Module.get_attribute(module, :symbol_end)
-    terminals = [symbol_empty, symbol_end | tl(Module.get_attribute(module, :terminals))]
+    terminals = [symbol_empty, symbol_end | Module.get_attribute(module, :terminals) |> List.delete(symbol_empty)]
     nonterminals = Module.get_attribute(module, :nonterminals)
 
     tables =
