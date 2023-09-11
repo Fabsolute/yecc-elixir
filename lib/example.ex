@@ -1,9 +1,23 @@
 defmodule Example do
   use Yecc
 
-  nonterminals [:list, :elems, :elem]
-  terminals [:"{", :"}", :",", :int, :atom]
   root :list
+
+  expect 1
+
+  nonterminals [
+    :list,
+    :elems,
+    :elem
+  ]
+
+  terminals [
+    :"{",
+    :"}",
+    :",",
+    :int,
+    :atom
+  ]
 
   defr list(:"{", :"}"), do: []
   defr list(:"{", {:elems, elems}, :"}"), do: elems
