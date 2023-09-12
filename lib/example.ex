@@ -3,8 +3,6 @@ defmodule Example do
 
   root :list
 
-  expect 1
-
   nonterminals [
     :list,
     :elems,
@@ -12,15 +10,15 @@ defmodule Example do
   ]
 
   terminals [
-    :"{",
-    :"}",
+    :"[",
+    :"]",
     :",",
     :int,
     :atom
   ]
 
-  defr list(:"{", :"}"), do: []
-  defr list(:"{", {:elems, elems}, :"}"), do: elems
+  defr list(:"[", :"]"), do: []
+  defr list(:"[", {:elems, elems}, :"]"), do: elems
 
   defr elems({:elem, elem}), do: elem
   defr elems({:elem, elem}, :",", {:elems, elems}), do: [elem | elems]

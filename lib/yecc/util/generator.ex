@@ -4,10 +4,11 @@ defmodule Yecc.Util.Generator do
 
   def generate_functions() do
     parse_actions = Table.get_instance_parse_actions() |> sort_parse_actions()
+                    |> IO.inspect(label: "parse_actions")
 
     state_reprs = find_identical_shift_states(parse_actions)
-    state_reprs |> IO.inspect(label: "state_reprs")
-    parse_actions |> IO.inspect(label: "parse_actions")
+                  |> IO.inspect(label: "state_reprs")
+
     state_info = collect_some_state_info(parse_actions, state_reprs)
     state_jumps = find_partial_shift_states(parse_actions, state_reprs)
   end
@@ -35,7 +36,7 @@ defmodule Yecc.Util.Generator do
 
   defp find_identical_shift_states(state_actions) do
     state_actions
-    |> Enum.map(fn {a, b} -> {b, a} end)
+    |> Enum.map(fn {state, actions} -> {actions, state} end)
     |> States.family()
     |> Enum.flat_map(fn {actions, states} ->
       Enum.map(
@@ -44,7 +45,7 @@ defmodule Yecc.Util.Generator do
          if shift_actions_only(actions) do
            hd(states)
          else
-           states
+           &1
          end}
       )
     end)
@@ -53,7 +54,7 @@ defmodule Yecc.Util.Generator do
 
   defp shift_actions_only(actions) do
     Enum.count(actions, fn
-      {_, {:shift, _, _, _, _}} -> true
+      {_, %Shift{}} -> true
       _ -> false
     end) == length(actions)
   end
@@ -70,9 +71,6 @@ defmodule Yecc.Util.Generator do
   end
 
   defp find_partial_shift_states(state_actions, state_reprs) do
-    state_actions |> IO.inspect(label: "state_actions")
-    state_reprs |> IO.inspect(label: "state_reprs")
-
     list =
       Enum.zip(state_actions, state_reprs)
       |> Enum.filter(fn
@@ -80,7 +78,6 @@ defmodule Yecc.Util.Generator do
         _ -> false
       end)
       |> Enum.map(&elem(&1, 0))
-      |> IO.inspect(label: :list)
 
     state_actions = :sofs.family(list, [{:state, [:action]}])
     state_action = :sofs.family_to_relation(state_actions)
@@ -89,7 +86,7 @@ defmodule Yecc.Util.Generator do
       :sofs.partition(:sofs.range(state_actions))
       |> :sofs.to_external()
 
-    part_name_list = Enum.with_index(parts, 1)
+    part_name_list = Enum.with_index(parts,  fn element, index -> {index+1, element} end)
 
     part_in_states =
       Enum.flat_map(part_name_list, fn {part_name, actions} ->
@@ -148,7 +145,7 @@ defmodule Yecc.Util.Generator do
       |> then(
         &:sofs.partition(
           1,
-          :sofs.relation(state_actions |> IO.inspect(label: "state_actions_sofs.relation"), [
+          :sofs.relation(state_actions, [
             {:state, :actions}
           ])
           |> IO.inspect(label: "state_actions"),

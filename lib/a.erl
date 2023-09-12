@@ -3,7 +3,7 @@
 -file("lib/a.yrl", 15).
 
 extract_token({_Token, _Line, Value}) -> Value.
--file("/opt/homebrew/Cellar/erlang/25.2/lib/erlang/lib/parsetools-2.4.1/include/yeccpre.hrl", 0).
+-file("/opt/homebrew/Cellar/erlang/26.0.2/lib/erlang/lib/parsetools-2.5/include/yeccpre.hrl", 0).
 %%
 %% %CopyrightBegin%
 %%
