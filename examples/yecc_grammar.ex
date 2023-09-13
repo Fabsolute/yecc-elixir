@@ -56,7 +56,7 @@ defmodule YeccGrammar do
 
   defr attached_code(:colon, {:tokens, tokens}), do: {:erlang_code, tokens}
 
-  defr attached_code(:__empty__) do
+  defr attached_code(:"$empty") do
     {:erlang_code,
      [
        {

@@ -218,7 +218,7 @@ defmodule ElixirParser do
   defr grammar(:eoe, {:expr_list, expr_list}), do: build_block(reverse(expr_list))
   defr grammar({:expr_list, expr_list}, :eoe), do: build_block(reverse(expr_list))
   defr grammar(:eoe, {:expr_list, expr_list}, :eoe), do: build_block(reverse(expr_list))
-  defr grammar(:__empty__), do: {:__block__, [], []}
+  defr grammar(:"$empty"), do: {:__block__, [], []}
 
   defr expr_list({:expr, expr}), do: [expr]
 

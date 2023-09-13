@@ -4,8 +4,8 @@ defmodule Yecc do
 
   defmacro __using__(opts) do
     quote do
-      @symbol_empty :__empty__
-      @symbol_end :__end__
+      @symbol_empty :"$empty"
+      @symbol_end :"$end"
       @nonterminals []
       @terminals [@symbol_empty]
 

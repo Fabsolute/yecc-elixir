@@ -39,7 +39,7 @@ defmodule Yecc.Util.Action do
             [{look_ahead, :accept} | compute_parse_actions1(items, n)]
 
           {[head | daughters], _} ->
-            daughters = List.delete(daughters, :__empty__)
+            daughters = List.delete(daughters, :"$empty")
 
             [
               {look_ahead,
