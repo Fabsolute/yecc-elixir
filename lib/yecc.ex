@@ -67,9 +67,6 @@ defmodule Yecc do
 
   defmacro defr({name, _meta, parameters}, expr \\ nil) do
     {values, symbols} = Util.parse_parameters(parameters)
-    values |> IO.inspect(label: :values)
-    symbols |> IO.inspect(label: :symbols)
-
     expr  = Macro.escape(expr)
 
     quote do

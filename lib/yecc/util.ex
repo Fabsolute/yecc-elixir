@@ -1,33 +1,11 @@
 defmodule Yecc.Util do
   alias Yecc.Util.{Table, States, Code, Action, Conflict, Generator}
 
-  def replace_args(args) do
-    {other, variables} = replace_args(args, MapSet.new())
-    {other, MapSet.to_list(variables)}
-  end
-
-  defp replace_args([h | t], variables) do
-    {h, variables} = replace_args(h, variables)
-    {t, variables} = replace_args(t, variables)
-    {[h | t], variables}
-  end
-
-  defp replace_args({:@, meta, [arg]}, variables) when is_number(arg) do
-    {{:get, meta, [arg]}, MapSet.put(variables, arg)}
-  end
-
-  defp replace_args({name, meta, args}, variables) when is_list(args) do
-    {args, variables} = replace_args(args, variables)
-    {{name, meta, args}, variables}
-  end
-
-  defp replace_args(other, variables), do: {other, variables}
-
   def clear_context(do: context), do: clear_context(context)
   def clear_context({:__block__, _, args}), do: args
   def clear_context(rest), do: [rest]
 
-  def parse_parameters(values), do: parse_parameters(values, 0)
+  def parse_parameters(values), do: parse_parameters(values, 1)
 
   defp parse_parameters([{h, v} | t], index) when is_atom(h) do
     {values, parameters} = parse_parameters(t, index + 1)
