@@ -1,3 +1,3 @@
-defmodule Yecc.Struct.Ctx do
+defmodule Yecc.Util.Ctx do
   defstruct terminal: nil, state_n: nil, res: []
 end

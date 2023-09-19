@@ -1,6 +1,6 @@
 defmodule Yecc do
   alias Yecc.Util
-  alias Yecc.Struct.Rule
+  alias Yecc.Util.Rule
 
   defmacro __using__(opts) do
     quote do

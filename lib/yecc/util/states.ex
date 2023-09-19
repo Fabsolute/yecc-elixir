@@ -1,6 +1,5 @@
 defmodule Yecc.Util.States do
-  alias Yecc.Struct.{Item, Rule}
-  alias Yecc.Util.{Table, Bitwise, Code}
+  alias Yecc.Util.{Table, Bitwise, Code, Item, Rule}
 
   def compute_states(rules, end_symbol) do
     coded_rules = Table.get_coded(:rules)
@@ -359,20 +358,8 @@ defmodule Yecc.Util.States do
     end
 
     Table.pop_closure()
-    |> state_items([], [])
+    |> Item.state_items([], [])
   end
-
-  defp state_items([{rule_pointer, look_ahead} | rest], items, id) do
-    item = %Item{
-      rule_pointer: rule_pointer,
-      look_ahead: look_ahead,
-      rhs: Table.get_rhs(rule_pointer)
-    }
-
-    state_items(rest, [item | items], [rule_pointer | id])
-  end
-
-  defp state_items(_, items, id), do: {id, items}
 
   defp state_seeds(items, symbols) do
     for %Item{rule_pointer: rule_pointer, look_ahead: look_ahead, rhs: [s | _]} <- items do

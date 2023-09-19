@@ -1,6 +1,5 @@
 defmodule Yecc.Util.Generator do
-  alias Yecc.Struct.{Reduce, Shift, StateInfo, PartData}
-  alias Yecc.Util.{States, Table}
+  alias Yecc.Util.{States, Table, UserCode, StateInfo, PartData, Shift, Reduce}
 
   def generate_functions() do
     parse_actions =
@@ -10,8 +9,12 @@ defmodule Yecc.Util.Generator do
     state_reprs =
       find_identical_shift_states(parse_actions)
 
-    state_info = collect_some_state_info(parse_actions, state_reprs)
+    state_info = StateInfo.collect_some_state_info(parse_actions, state_reprs)
     state_jumps = find_partial_shift_states(parse_actions, state_reprs)
+
+    user_code_actions =
+      UserCode.find_user_code(parse_actions)
+      |> dbg()
   end
 
   defp sort_parse_actions(list) do
@@ -24,8 +27,8 @@ defmodule Yecc.Util.Generator do
   defp sort_parse_actions1(look_ahead_actions) do
     [
       &(&1 == :accept),
-      &is_struct(&1, Shift),
-      &is_struct(&1, Reduce),
+      &Shift.is/1,
+      &Reduce.is/1,
       &(&1 == :non_assoc)
     ]
     |> Enum.flat_map(
@@ -60,17 +63,6 @@ defmodule Yecc.Util.Generator do
     end) == length(actions)
   end
 
-  defp collect_some_state_info(state_actions, state_reprs) do
-    Enum.zip(state_actions, state_reprs)
-    |> Enum.map(fn {{state, look_ahead_actions}, {state, repr}} ->
-      {state,
-       %StateInfo{
-         reduce_only: Enum.all?(look_ahead_actions, &is_struct(elem(&1, 1), Reduce)),
-         state_repr: repr
-       }}
-    end)
-  end
-
   defp find_partial_shift_states(state_action_list, state_reprs) do
     list =
       Enum.zip(state_action_list, state_reprs)
@@ -81,45 +73,7 @@ defmodule Yecc.Util.Generator do
       |> Enum.map(&elem(&1, 0))
 
     state_actions = :sofs.family(list, [{:state, [:action]}])
-    state_action = :sofs.family_to_relation(state_actions)
-
-    parts =
-      :sofs.partition(:sofs.range(state_actions))
-      |> :sofs.to_external()
-
-    part_name_list = Enum.with_index(parts, fn element, index -> {index + 1, element} end)
-
-    part_in_states =
-      Enum.flat_map(part_name_list, fn {part_name, actions} ->
-        Enum.map(actions, &{&1, part_name})
-      end)
-      |> :sofs.relation([{:action, :part_name}])
-      |> then(&:sofs.relative_product(state_action, &1))
-      |> :sofs.converse()
-      |> :sofs.relation_to_family()
-      |> :sofs.to_external()
-
-    part_actions = :sofs.family(part_name_list, [{:partname, [:action]}])
-
-    part_states =
-      state_actions
-      |> :sofs.converse()
-      |> then(&:sofs.relative_product(part_actions, &1))
-      |> States.sofs_family_with_domain(:sofs.domain(part_actions))
-      |> :sofs.to_external()
-
-    parts_selected =
-      List.zip([part_name_list, part_in_states, part_states])
-      |> Enum.map(fn {{name, actions}, {name, states}, {name, eq_state}} ->
-        %PartData{
-          name: name,
-          eq_state: eq_state,
-          actions: actions,
-          n_actions: length(actions),
-          states: :ordsets.from_list(states)
-        }
-      end)
-      |> select_parts()
+    parts_selected = PartData.select_part_data(state_actions)
 
     jump_list_1 =
       for {_, %PartData{actions: actions, eq_state: [], states: states}} <- parts_selected,
@@ -158,54 +112,5 @@ defmodule Yecc.Util.Generator do
          {s, {actions -- part, {tag, to, part}}}
        end)
     |> List.keysort(0)
-  end
-
-  defp select_parts([]), do: []
-
-  defp select_parts(part_data_list) do
-    [{weight, part_data} | ws] =
-      part_data_list
-      |> Enum.map(&{score(&1), &1})
-      |> List.keysort(0)
-      |> Enum.reverse()
-
-    %PartData{n_actions: n_actions, states: states} = part_data
-
-    if weight < 8 do
-      []
-    else
-      for {w1, %PartData{states: states0} = d} <- ws,
-          w1 > 0,
-          (new_states = :ordsets.subtract(states0, states)) != [] do
-        %{d | states: new_states}
-      end
-      |> select_parts()
-      |> then(
-        &if length(states) == 1 or n_actions == 1 do
-          &1
-        else
-          [{weight, part_data} | &1]
-        end
-      )
-    end
-  end
-
-  # %% Does it pay off to extract clauses into a new function?
-  # %% Assumptions:
-  # %% - a call costs 8 (C = 8);
-  # %% - a clause (per action) costs 20 plus 8 (select) (Cl = 28);
-  # %% - a new function costs 20 (funinfo) plus 16 (select) (F = 36).
-  # %% A is number of actions, S is number of states.
-  # %% Special case (the part equals all actions of some state):
-  # %% C * (S - 1) < (S - 1) * A * Cl
-  # %% Normal case (introduce new function):
-  # %% F + A * Cl + C * S < S * A * Cl
-  defp score(%PartData{states: states, n_actions: n_actions, eq_state: eq_state}) do
-    (length(states) - 1) * n_actions * 28 - length(states) * 8 -
-      if eq_state == [] do
-        36
-      else
-        -8
-      end
   end
 end

@@ -1,6 +1,5 @@
 defmodule Yecc.Util.Conflict do
-  alias Yecc.Struct.{Ctx, Shift, Reduce}
-  alias Yecc.Util.{Table, States, Action}
+  alias Yecc.Util.{Table, States, Action, Shift, Reduce, Ctx}
 
   def action_conflicts() do
     {_, actions} =

@@ -1,8 +1,7 @@
 defmodule Yecc.Util.Action do
   @accept {}
 
-  alias Yecc.Struct.{Item, Rule, Reduce, Shift}
-  alias Yecc.Util.{Table, Code, States}
+  alias Yecc.Util.{Table, Code, States, Reduce, Shift, Item, Rule}
 
   def parse_actions() do
     n = Table.get_instance_n()

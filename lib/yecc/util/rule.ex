@@ -1,3 +1,3 @@
-defmodule Yecc.Struct.Rule do
+defmodule Yecc.Util.Rule do
   defstruct n: nil, symbols: nil, tokens: nil
 end
