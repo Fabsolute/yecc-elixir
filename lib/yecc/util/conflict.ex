@@ -12,7 +12,7 @@ defmodule Yecc.Util.Conflict do
           |> States.family()
           |> List.foldl({ctx, []}, fn {terminal, as}, {ctx, acts} ->
             ctx = %{ctx | terminal: terminal, state_n: n}
-            {action, ctx} = action_conflicts(as, ctx)
+            {action, ctx} = action_conflicts(as |> dbg, ctx)
             {ctx, [{action, terminal} | acts]}
           end)
 

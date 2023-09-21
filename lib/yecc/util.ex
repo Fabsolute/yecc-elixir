@@ -61,7 +61,7 @@ defmodule Yecc.Util do
     Conflict.action_conflicts()
   end
 
-  def generate_functions(_) do
-    Generator.generate_functions()
+  def generate_functions(module) do
+    Generator.generate_functions(module)
   end
 end

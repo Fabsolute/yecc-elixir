@@ -7,6 +7,7 @@ list -> '[' elems ']' : '$2'.
 
 elems -> elem           : ['$1'].
 elems -> elem ',' elems : ['$1'|'$3'].
+elems -> '$empty': nil.
 
 elem -> int  : extract_token('$1').
 elem -> atom : extract_token('$1').

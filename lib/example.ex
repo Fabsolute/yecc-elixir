@@ -22,6 +22,7 @@ defmodule Example do
 
   defr elems({:elem, elem}), do: elem
   defr elems({:elem, elem}, :",", {:elems, elems}), do: [elem | elems]
+  defr elems(:"$empty"), do: nil
 
   defr elem({:int, value}), do: extract_token(value)
   defr elem({:atom, value}), do: extract_token(value)

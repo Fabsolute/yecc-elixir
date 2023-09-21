@@ -472,7 +472,7 @@ defmodule Yecc.Util.States do
     Table.store_goto({{from, symbol, to}})
   end
 
-  defp family_with_domain(list, domain) do
+  def family_with_domain(list, domain) do
     list
     |> :sofs.relation()
     |> sofs_family_with_domain(:sofs.set(domain))

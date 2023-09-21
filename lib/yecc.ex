@@ -30,9 +30,11 @@ defmodule Yecc do
       &Util.create_precedence_table/1,
       &Util.compute_parse_actions/1,
       &Util.action_conflicts/1,
-      &Util.generate_functions/1
     ]
     |> Enum.each(& &1.(env.module))
+
+
+    functions = Util.generate_functions(env.module)
 
     table_contents =
       [
@@ -62,6 +64,8 @@ defmodule Yecc do
           unquote(a ++ b)
         end
       end
+
+      unquote(functions)
     end
   end
 

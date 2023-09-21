@@ -1,7 +1,16 @@
 defmodule Yecc.Util.Generator do
-  alias Yecc.Util.{States, Table, UserCode, StateInfo, PartData, Shift, Reduce}
+  alias Yecc.Util.{
+    States,
+    Table,
+    UserCode,
+    StateInfo,
+    PartData,
+    Shift,
+    Reduce,
+    CodeGenerator
+  }
 
-  def generate_functions() do
+  def generate_functions(module) do
     parse_actions =
       Table.get_instance_parse_actions()
       |> sort_parse_actions()
@@ -11,10 +20,21 @@ defmodule Yecc.Util.Generator do
 
     state_info = StateInfo.collect_some_state_info(parse_actions, state_reprs)
     state_jumps = find_partial_shift_states(parse_actions, state_reprs)
+    nonterminals = Module.get_attribute(module, :nonterminals)
 
-    user_code_actions =
-      UserCode.find_user_code(parse_actions)
+    actions = CodeGenerator.output_actions(state_jumps, state_info)
+
+    gotos =
+      Table.get_all_goto()
+      |> Enum.map(fn {{from, symbol}, to} -> {symbol, {from, to}} end)
+      |> States.family_with_domain(nonterminals)
+      |> CodeGenerator.output_goto(state_info)
       |> dbg()
+
+    inlines =
+      parse_actions
+      |> UserCode.find_user_code()
+      |> CodeGenerator.output_inlined()
   end
 
   defp sort_parse_actions(list) do
